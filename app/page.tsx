@@ -39,7 +39,10 @@ const solveExamples = EXAMPLE_PROBLEMS.filter(
 
 const sequenceExamples = EXAMPLE_PROBLEMS.filter(
   (example) =>
-    example.input.includes(",") && !example.input.startsWith("points "),
+    example.input.includes(",") &&
+    !example.input.startsWith("points ") &&
+    !example.input.startsWith("parallel ") &&
+    !example.input.startsWith("perpendicular "),
 );
 
 export default function Home() {
@@ -107,13 +110,13 @@ export default function Home() {
               aria-label="Math problem"
               className="problem-input"
               onChange={(event) => setProblem(event.target.value)}
-              placeholder="Solve 3x + 5 = 26, graph y = x^2 - 4x + 3, use points A(1, 2) B(5, 10) or parallel through P(3, 4) to y = 2x + 1, or enter a_n = 3a_(n - 1), a_1 = 2"
+              placeholder="Solve 3x + 5 = 26, graph y = x^2 - 4x + 3, use A(1, 2), B(5, 10) or parallel through P(3, 4) to y = 2x + 1, or enter a_n = 3a_(n - 1), a_1 = 2"
               spellCheck={false}
               value={problem}
             />
             <div className="entry-hint">
               <strong>More than equations.</strong>
-              <span>Use y = ... for graphs, points or parallel/perpendicular line prompts for geometry, or sequence terms and recursive rules.</span>
+              <span>Use y = ... for graphs, two coordinate points or parallel/perpendicular line prompts for geometry, or sequence terms and recursive rules.</span>
             </div>
             <div className="mode-row" aria-label="Output mode">
               {modeLabels.map((item) => (
@@ -158,7 +161,7 @@ export default function Home() {
           <div className="example-group" aria-label="Geometry examples">
             <h2 className="section-title">Coordinate geometry</h2>
             <p className="section-note">
-              Use two points, or build a parallel or perpendicular line through a point.
+              Use two points like A(1, 2), B(5, 10), or build a parallel or perpendicular line through a point.
             </p>
             <div className="example-list">
               {geometryExamples.map((example) => (

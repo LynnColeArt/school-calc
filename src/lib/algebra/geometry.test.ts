@@ -17,6 +17,21 @@ describe("analyzeCoordinateGeometry", () => {
     expect(geometry?.steps.some((step) => step.math.includes("m ="))).toBe(true);
   });
 
+  it("accepts two-point input without the points keyword", () => {
+    const geometry = analyzeCoordinateGeometry("A = (1, 2), B = (5, 10)");
+
+    expect(geometry?.features).toEqual(
+      expect.arrayContaining([
+        { label: "Slope", value: "2" },
+        { label: "Midpoint", value: "(3, 6)" },
+        { label: "Distance", value: "4sqrt(5)" },
+        { label: "Slope-intercept form", value: "y = 2x" },
+      ]),
+    );
+    expect(geometry?.points[0]?.label).toBe("A(1, 2)");
+    expect(geometry?.points[1]?.label).toBe("B(5, 10)");
+  });
+
   it("handles a vertical line", () => {
     const geometry = analyzeCoordinateGeometry("points A(3, -1) B(3, 5)");
 
@@ -47,6 +62,21 @@ describe("analyzeCoordinateGeometry", () => {
       ]),
     );
     expect(geometry?.referenceLineLabel).toBe("y = 2x + 1");
+  });
+
+  it("accepts the line relationship when the line comes first", () => {
+    const geometry = analyzeCoordinateGeometry(
+      "parallel to y = 2x + 1 through P(3, 4)",
+    );
+
+    expect(geometry?.features).toEqual(
+      expect.arrayContaining([
+        { label: "Relationship", value: "parallel" },
+        { label: "Given line", value: "y = 2x + 1" },
+        { label: "New slope", value: "2" },
+        { label: "Slope-intercept form", value: "y = 2x - 2" },
+      ]),
+    );
   });
 
   it("builds a perpendicular line through a point", () => {

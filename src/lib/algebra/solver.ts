@@ -2371,23 +2371,54 @@ function buildProjectedSequenceTerms(
 }
 
 function parseLineRelationshipGeometry(input: string) {
-  const match = input
-    .trim()
-    .match(
-      /^(parallel|perpendicular)\s+through\s+([A-Za-z])?\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)\s+to\s+(.+)$/i,
-    );
-  if (!match?.[1] || !match[3] || !match[4] || !match[5]) {
+  const trimmed = input.trim();
+  const throughThenLine = trimmed.match(
+    /^(parallel|perpendicular)\s+through\s+([A-Za-z])?\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)\s+to\s+(.+)$/i,
+  );
+  const lineThenThrough = trimmed.match(
+    /^(parallel|perpendicular)\s+to\s+(.+)\s+through\s+([A-Za-z])?\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)$/i,
+  );
+
+  let relation: "parallel" | "perpendicular";
+  let label: string;
+  let xText: string;
+  let yText: string;
+  let referenceText: string;
+
+  if (
+    throughThenLine?.[1] &&
+    throughThenLine[3] &&
+    throughThenLine[4] &&
+    throughThenLine[5]
+  ) {
+    relation = throughThenLine[1].toLowerCase() as "parallel" | "perpendicular";
+    label = throughThenLine[2] ?? "P";
+    xText = throughThenLine[3].trim();
+    yText = throughThenLine[4].trim();
+    referenceText = throughThenLine[5].trim();
+  } else if (
+    lineThenThrough?.[1] &&
+    lineThenThrough[2] &&
+    lineThenThrough[4] &&
+    lineThenThrough[5]
+  ) {
+    relation = lineThenThrough[1].toLowerCase() as "parallel" | "perpendicular";
+    label = lineThenThrough[3] ?? "P";
+    xText = lineThenThrough[4].trim();
+    yText = lineThenThrough[5].trim();
+    referenceText = lineThenThrough[2].trim();
+  } else {
     return null;
   }
 
   try {
-    const referenceLine = parseGeometryLineEquation(match[5].trim());
+    const referenceLine = parseGeometryLineEquation(referenceText);
     return {
-      relation: match[1].toLowerCase() as "parallel" | "perpendicular",
+      relation,
       point: {
-        label: match[2] ?? "P",
-        x: Rational.fromString(match[3].trim()),
-        y: Rational.fromString(match[4].trim()),
+        label,
+        x: Rational.fromString(xText),
+        y: Rational.fromString(yText),
       },
       referenceLine,
     };
@@ -2482,13 +2513,9 @@ function buildRecursiveSequenceTerms(
 
 function parseGeometryPoints(input: string) {
   const trimmed = input.trim();
-  if (!trimmed.toLowerCase().startsWith("points")) {
-    return null;
-  }
-
   const matches = Array.from(
     trimmed.matchAll(
-      /([A-Za-z])?\s*\((-?\d+(?:\/\d+)?(?:\.\d+)?),\s*(-?\d+(?:\/\d+)?(?:\.\d+)?)\)/g,
+      /([A-Za-z])?\s*(?:=\s*)?\(\s*(-?\d+(?:\/\d+)?(?:\.\d+)?)\s*,\s*(-?\d+(?:\/\d+)?(?:\.\d+)?)\s*\)/g,
     ),
   );
   if (matches.length !== 2) {
