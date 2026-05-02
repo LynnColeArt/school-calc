@@ -1,4 +1,11 @@
-import type { MathStatement, SolveStep, SolveTrace } from "./types";
+import type {
+  GraphAnalysis,
+  GraphFeature,
+  GraphPoint,
+  MathStatement,
+  SolveStep,
+  SolveTrace,
+} from "./types";
 
 type Linear = {
   coefficient: Rational;
@@ -163,6 +170,30 @@ export function solveAlgebra(input: string): SolveTrace {
   );
 }
 
+export function analyzeGraph(input: string): GraphAnalysis | null {
+  const normalizedInput = normalizeInput(input);
+  const [leftRaw, rightRaw, extra] = normalizedInput.split("=");
+  if (
+    extra !== undefined ||
+    leftRaw === undefined ||
+    rightRaw === undefined ||
+    leftRaw !== "y"
+  ) {
+    return null;
+  }
+
+  try {
+    const expression = parsePolynomial(rightRaw);
+    if (expression.squareCoefficient.isZero()) {
+      return buildLinearGraphAnalysis(expression);
+    }
+
+    return buildQuadraticGraphAnalysis(expression);
+  } catch {
+    return null;
+  }
+}
+
 function trySolveLinearEquation(input: string): SolveTrace | null {
   if (!input.includes("=") || /sqrt|√|\^/.test(input)) {
     return null;
@@ -293,6 +324,200 @@ function trySolveLinearEquation(input: string): SolveTrace | null {
   } catch {
     return null;
   }
+}
+
+function buildLinearGraphAnalysis(expression: Polynomial): GraphAnalysis {
+  const slope = expression.coefficient;
+  const yIntercept = expression.constant;
+  const yText = formatPolynomial(expression);
+  const features: GraphFeature[] = [
+    { label: "Slope", value: slope.format() },
+    { label: "y-intercept", value: formatCoordinate("0", yIntercept.format()) },
+  ];
+
+  const highlightedPoints: GraphPoint[] = [
+    {
+      x: 0,
+      y: rationalToNumber(yIntercept),
+      label: formatCoordinate("0", yIntercept.format()),
+      role: "intercept",
+    },
+  ];
+
+  if (slope.isZero()) {
+    features.push({ label: "x-intercept", value: "none" });
+    features.push({ label: "Domain", value: "all real numbers" });
+    features.push({ label: "Range", value: `y = ${yIntercept.format()}` });
+  } else {
+    const xIntercept = yIntercept.negate().divide(slope);
+    features.push({
+      label: "x-intercept",
+      value: formatCoordinate(xIntercept.format(), "0"),
+    });
+    features.push({ label: "Domain", value: "all real numbers" });
+    features.push({ label: "Range", value: "all real numbers" });
+    highlightedPoints.push({
+      x: rationalToNumber(xIntercept),
+      y: 0,
+      label: formatCoordinate(xIntercept.format(), "0"),
+      role: "intercept",
+    });
+  }
+
+  const tableInputs = [new Rational(-2), Rational.zero(), new Rational(2)];
+  const table = tableInputs.map((xValue) => ({
+    x: xValue.format(),
+    y: evaluatePolynomialAtRational(expression, xValue).format(),
+  }));
+
+  const window = buildGraphWindow(
+    highlightedPoints,
+    tableInputs.map((xValue) => ({
+      x: rationalToNumber(xValue),
+      y: rationalToNumber(evaluatePolynomialAtRational(expression, xValue)),
+      label: formatCoordinate(
+        xValue.format(),
+        evaluatePolynomialAtRational(expression, xValue).format(),
+      ),
+      role: "sample" as const,
+    })),
+  );
+
+  return {
+    kind: "linear",
+    title: "Linear function",
+    topic: "Graphing",
+    equation: `y = ${yText}`,
+    summary: "Slope, intercepts, and a value table",
+    standardCodes: ["A1.FIF.B.4", "A1.FIF.B.6"],
+    features,
+    table,
+    highlightedPoints,
+    coefficients: {
+      a: 0,
+      b: rationalToNumber(slope),
+      c: rationalToNumber(yIntercept),
+    },
+    window,
+  };
+}
+
+function buildQuadraticGraphAnalysis(expression: Polynomial): GraphAnalysis {
+  const vertexX = expression.coefficient
+    .negate()
+    .divide(expression.squareCoefficient.multiply(new Rational(2)));
+  const vertexY = evaluatePolynomialAtRational(expression, vertexX);
+  const integerForm = toIntegerQuadratic(expression);
+  const discriminant =
+    integerForm.b * integerForm.b - 4 * integerForm.a * integerForm.c;
+  const rootCandidates =
+    discriminant < 0
+      ? []
+      : buildQuadraticFormulaCandidates(
+          integerForm.a,
+          integerForm.b,
+          discriminant,
+        );
+  const features: GraphFeature[] = [
+    { label: "Vertex", value: formatCoordinate(vertexX.format(), vertexY.format()) },
+    { label: "Axis of symmetry", value: `x = ${vertexX.format()}` },
+    {
+      label: "Opening",
+      value: expression.squareCoefficient.isNegative() ? "down" : "up",
+    },
+    {
+      label: "y-intercept",
+      value: formatCoordinate("0", expression.constant.format()),
+    },
+  ];
+
+  if (rootCandidates.length === 0) {
+    features.push({ label: "x-intercepts", value: "no real intercepts" });
+  } else if (rootCandidates.length === 1) {
+    features.push({
+      label: "x-intercept",
+      value: formatCoordinate(rootCandidates[0].exact, "0"),
+    });
+  } else {
+    features.push({
+      label: "x-intercepts",
+      value: rootCandidates
+        .map((candidate) => formatCoordinate(candidate.exact, "0"))
+        .join(", "),
+    });
+  }
+
+  features.push({ label: "Domain", value: "all real numbers" });
+  features.push({
+    label: "Range",
+    value: expression.squareCoefficient.isNegative()
+      ? `y <= ${vertexY.format()}`
+      : `y >= ${vertexY.format()}`,
+  });
+
+  const highlightedPoints: GraphPoint[] = dedupeGraphPoints([
+    {
+      x: rationalToNumber(vertexX),
+      y: rationalToNumber(vertexY),
+      label: formatCoordinate(vertexX.format(), vertexY.format()),
+      role: "vertex",
+    },
+    {
+      x: 0,
+      y: rationalToNumber(expression.constant),
+      label: formatCoordinate("0", expression.constant.format()),
+      role: "intercept",
+    },
+    ...rootCandidates.map((candidate) => ({
+      x: candidate.approx,
+      y: 0,
+      label: formatCoordinate(candidate.exact, "0"),
+      role: "intercept" as const,
+    })),
+  ]);
+
+  const tableInputs = [
+    vertexX.subtract(new Rational(2)),
+    vertexX.subtract(new Rational(1)),
+    vertexX,
+    vertexX.add(new Rational(1)),
+    vertexX.add(new Rational(2)),
+  ];
+  const table = tableInputs.map((xValue) => ({
+    x: xValue.format(),
+    y: evaluatePolynomialAtRational(expression, xValue).format(),
+  }));
+
+  const window = buildGraphWindow(
+    highlightedPoints,
+    tableInputs.map((xValue) => ({
+      x: rationalToNumber(xValue),
+      y: rationalToNumber(evaluatePolynomialAtRational(expression, xValue)),
+      label: formatCoordinate(
+        xValue.format(),
+        evaluatePolynomialAtRational(expression, xValue).format(),
+      ),
+      role: "sample" as const,
+    })),
+  );
+
+  return {
+    kind: "quadratic",
+    title: "Quadratic function",
+    topic: "Graphing",
+    equation: `y = ${formatPolynomial(expression)}`,
+    summary: "Vertex, intercepts, axis of symmetry, and a value table",
+    standardCodes: ["A1.FIF.B.4", "A1.FIF.B.6"],
+    features,
+    table,
+    highlightedPoints,
+    coefficients: {
+      a: rationalToNumber(expression.squareCoefficient),
+      b: rationalToNumber(expression.coefficient),
+      c: rationalToNumber(expression.constant),
+    },
+    window,
+  };
 }
 
 function trySolveSquareEquation(input: string): SolveTrace | null {
@@ -1338,6 +1563,59 @@ function formatLinearSubstitution(expression: Linear, value: Rational) {
   }
 
   return terms.join(" ") || "0";
+}
+
+function evaluatePolynomialAtRational(value: Polynomial, x: Rational) {
+  return value.squareCoefficient
+    .multiply(x.multiply(x))
+    .add(value.coefficient.multiply(x))
+    .add(value.constant);
+}
+
+function rationalToNumber(value: Rational) {
+  return value.numerator / value.denominator;
+}
+
+function formatCoordinate(x: string, y: string) {
+  return `(${x}, ${y})`;
+}
+
+function dedupeGraphPoints(points: GraphPoint[]) {
+  const unique: GraphPoint[] = [];
+  for (const point of points) {
+    if (
+      !unique.some(
+        (existing) =>
+          Math.abs(existing.x - point.x) < 1e-9 &&
+          Math.abs(existing.y - point.y) < 1e-9,
+      )
+    ) {
+      unique.push(point);
+    }
+  }
+  return unique;
+}
+
+function buildGraphWindow(
+  highlightedPoints: GraphPoint[],
+  samplePoints: GraphPoint[],
+) {
+  const allPoints = [...highlightedPoints, ...samplePoints];
+  const xValues = allPoints.map((point) => point.x);
+  const yValues = allPoints.map((point) => point.y);
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues);
+  const xPadding = Math.max(2, (xMax - xMin) * 0.25 || 2);
+  const yPadding = Math.max(2, (yMax - yMin) * 0.25 || 2);
+
+  return {
+    xMin: Math.floor(xMin - xPadding),
+    xMax: Math.ceil(xMax + xPadding),
+    yMin: Math.floor(yMin - yPadding),
+    yMax: Math.ceil(yMax + yPadding),
+  };
 }
 
 function formatCandidate(value: Rational) {

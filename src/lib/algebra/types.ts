@@ -41,3 +41,44 @@ export type RenderedTrace = {
   lines: RenderedLine[];
 };
 
+export type GraphFeature = {
+  label: string;
+  value: string;
+};
+
+export type GraphPoint = {
+  x: number;
+  y: number;
+  label: string;
+  role: "sample" | "intercept" | "vertex";
+};
+
+export type GraphTableRow = {
+  x: string;
+  y: string;
+};
+
+export type GraphWindow = {
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+};
+
+export type GraphAnalysis = {
+  kind: "linear" | "quadratic";
+  title: string;
+  topic: string;
+  equation: string;
+  summary: string;
+  standardCodes: string[];
+  features: GraphFeature[];
+  table: GraphTableRow[];
+  highlightedPoints: GraphPoint[];
+  coefficients: {
+    a: number;
+    b: number;
+    c: number;
+  };
+  window: GraphWindow;
+};

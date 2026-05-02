@@ -248,6 +248,18 @@ button {
 }
 
 .solution-body {
+  padding: 0;
+}
+
+.solution-layout {
+  display: grid;
+}
+
+.solution-layout-work.solution-layout-graph {
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.9fr);
+}
+
+.work-section {
   padding: 1.25rem 1.5rem 1.5rem;
   display: grid;
   gap: 1rem;
@@ -345,6 +357,171 @@ button {
   font-size: 1.1rem;
 }
 
+.graph-section {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.solution-layout-work .graph-section {
+  border-left: 1px solid var(--line);
+}
+
+.graph-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.graph-heading h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.graph-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.graph-equation {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.95rem;
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.graph-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(250px, 0.9fr);
+  gap: 1rem;
+}
+
+.graph-stage {
+  min-width: 0;
+}
+
+.graph-canvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 12 / 7;
+  display: block;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 238, 231, 0.9));
+}
+
+.graph-grid-line {
+  stroke: #d8ddd4;
+  stroke-width: 1;
+}
+
+.graph-axis {
+  stroke: #6d7678;
+  stroke-width: 1.4;
+}
+
+.graph-curve {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.graph-point {
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.graph-point-intercept {
+  fill: var(--gold);
+}
+
+.graph-point-vertex {
+  fill: var(--accent-strong);
+}
+
+.graph-point-sample {
+  fill: var(--accent);
+}
+
+.graph-axis-label,
+.graph-point-label {
+  fill: var(--muted);
+  font-size: 13px;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+.graph-point-label {
+  fill: var(--foreground);
+  font-size: 12px;
+}
+
+.graph-sidebar {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.graph-features {
+  margin: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.graph-feature-row {
+  display: grid;
+  gap: 0.2rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.graph-feature-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.graph-feature-row dt {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.graph-feature-row dd {
+  margin: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.94rem;
+}
+
+.graph-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.graph-table th,
+.graph-table td {
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--line);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92rem;
+  text-align: left;
+}
+
+.graph-table th {
+  color: var(--muted);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 @media (max-width: 880px) {
   .topbar {
     align-items: flex-start;
@@ -359,8 +536,19 @@ button {
     min-height: auto;
   }
 
+  .solution-layout-work.solution-layout-graph,
+  .graph-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .solution-layout-work .graph-section {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
   .solution-header,
-  .result-row {
+  .result-row,
+  .graph-heading {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -392,5 +580,8 @@ button {
   .step-table td {
     padding: 0.6rem 0;
   }
-}
 
+  .graph-equation {
+    white-space: normal;
+  }
+}

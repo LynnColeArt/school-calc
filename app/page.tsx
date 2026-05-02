@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { GraphPanel } from "../src/components/graph-panel";
 import { EXAMPLE_PROBLEMS } from "../src/lib/algebra/examples";
 import { renderTrace } from "../src/lib/algebra/render";
-import { solveAlgebra } from "../src/lib/algebra/solver";
+import { analyzeGraph, solveAlgebra } from "../src/lib/algebra/solver";
 import type { OutputMode } from "../src/lib/algebra/types";
 
 const modeLabels: Array<{ mode: OutputMode; label: string }> = [
@@ -18,7 +19,15 @@ export default function Home() {
   const [submitted, setSubmitted] = useState(problem);
 
   const trace = useMemo(() => solveAlgebra(submitted), [submitted]);
+  const graph = useMemo(() => analyzeGraph(submitted), [submitted]);
   const rendered = useMemo(() => renderTrace(trace, mode), [trace, mode]);
+  const showWork = trace.result.kind !== "unsupported";
+  const displayTitle =
+    !showWork && graph ? graph.title : trace.title;
+  const displayTopic =
+    !showWork && graph ? graph.topic : trace.topic;
+  const displayStandards =
+    !showWork && graph ? graph.standardCodes : trace.standardCodes;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,67 +91,76 @@ export default function Home() {
           </div>
 
           <p className="notes">
-            First slice: linear equations, square equations, square-root
-            equations, and square-root simplification.
+            First slice: equation solving, radicals, and graphing for lines and
+            parabolas written as y = ...
           </p>
         </aside>
 
         <section className="solution-panel" aria-live="polite">
           <div className="solution-header">
             <div>
-              <h2>{trace.title}</h2>
-              <p>{trace.standardCodes.join(", ")}</p>
+              <h2>{displayTitle}</h2>
+              <p>{displayStandards.join(", ")}</p>
             </div>
-            <div className="topic-tag">{trace.topic}</div>
+            <div className="topic-tag">{displayTopic}</div>
           </div>
 
           <div className="solution-body">
-            {trace.result.kind === "unsupported" ? (
-              <div className="unsupported">{trace.result.explanation}</div>
-            ) : (
-              <>
-                {mode === "homework" && (
-                  <table className="step-table">
-                    <tbody>
+            <div
+              className={`solution-layout ${
+                graph ? "solution-layout-graph" : ""
+              } ${showWork ? "solution-layout-work" : ""}`.trim()}
+            >
+              {showWork && (
+                <div className="work-section">
+                  {mode === "homework" && (
+                    <table className="step-table">
+                      <tbody>
+                        {rendered.lines.map((line, index) => (
+                          <tr key={`${line.math}-${index}`}>
+                            <td className="math-line">{line.math}</td>
+                            <td className="operation">{line.note}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {mode === "annotated" && (
+                    <div>
                       {rendered.lines.map((line, index) => (
-                        <tr key={`${line.math}-${index}`}>
-                          <td className="math-line">{line.math}</td>
-                          <td className="operation">{line.note}</td>
-                        </tr>
+                        <div className="annotated-step" key={`${line.math}-${index}`}>
+                          <div className="math-line">{line.math}</div>
+                          <div className="reason">{line.note}</div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
-                )}
+                    </div>
+                  )}
 
-                {mode === "annotated" && (
-                  <div>
-                    {rendered.lines.map((line, index) => (
-                      <div className="annotated-step" key={`${line.math}-${index}`}>
-                        <div className="math-line">{line.math}</div>
-                        <div className="reason">{line.note}</div>
-                      </div>
-                    ))}
+                  {mode === "hint" && (
+                    <div className="hint-box">
+                      <h3>Next step</h3>
+                      <div className="math-line">{rendered.lines[0]?.math}</div>
+                      <p className="reason">{rendered.lines[0]?.note}</p>
+                    </div>
+                  )}
+
+                  <div className="result-row">
+                    <span>Result</span>
+                    <strong>{trace.result.value}</strong>
                   </div>
-                )}
-
-                {mode === "hint" && (
-                  <div className="hint-box">
-                    <h3>Next step</h3>
-                    <div className="math-line">{rendered.lines[0]?.math}</div>
-                    <p className="reason">{rendered.lines[0]?.note}</p>
-                  </div>
-                )}
-
-                <div className="result-row">
-                  <span>Result</span>
-                  <strong>{trace.result.value}</strong>
                 </div>
-              </>
-            )}
+              )}
+
+              {!showWork && !graph && (
+                <div className="unsupported">{trace.result.explanation}</div>
+              )}
+
+              {graph && <GraphPanel graph={graph} />}
+            </div>
           </div>
         </section>
       </div>
     </main>
   );
 }
-

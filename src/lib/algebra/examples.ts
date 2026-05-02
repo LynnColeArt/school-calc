@@ -63,4 +63,12 @@ export const EXAMPLE_PROBLEMS = [
     input: "3sqrt(12) - sqrt(27)",
     label: "radical subtraction",
   },
+  {
+    input: "y = 2x + 1",
+    label: "graph line",
+  },
+  {
+    input: "y = x^2 - 4x + 3",
+    label: "graph parabola",
+  },
 ] as const;
