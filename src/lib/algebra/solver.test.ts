@@ -29,11 +29,46 @@ describe("solveAlgebra", () => {
     expect(trace.standardCodes).toContain("A1.REI.A.2");
   });
 
+  it("isolates a square term before using the square root property", () => {
+    const trace = solveAlgebra("x^2 + 5 = 54");
+
+    expect(trace.result.value).toBe("x = 7 or x = -7");
+    expect(trace.steps.map((step) => step.after.text)).toContain("x^2 = 49");
+  });
+
+  it("divides a square coefficient before solving", () => {
+    const trace = solveAlgebra("4x^2 = 100");
+
+    expect(trace.result.value).toBe("x = 5 or x = -5");
+    expect(trace.steps.map((step) => step.after.text)).toContain("x^2 = 25");
+  });
+
+  it("handles a difference-of-squares shape by isolating x squared", () => {
+    const trace = solveAlgebra("x^2 - 9 = 0");
+
+    expect(trace.result.value).toBe("x = 3 or x = -3");
+    expect(trace.steps.map((step) => step.after.text)).toContain("x^2 = 9");
+  });
+
+  it("solves a zero square equation as one solution", () => {
+    const trace = solveAlgebra("x^2 = 0");
+
+    expect(trace.result.value).toBe("x = 0");
+  });
+
   it("solves a simple square-root equation with a check step", () => {
     const trace = solveAlgebra("sqrt(x) = 5");
 
     expect(trace.result.value).toBe("x = 25");
     expect(trace.steps.at(-1)?.after.text).toBe("sqrt(25) = 5");
+  });
+
+  it("solves a square-root equation with a linear radicand", () => {
+    const trace = solveAlgebra("sqrt(x + 4) = 7");
+
+    expect(trace.result.value).toBe("x = 45");
+    expect(trace.steps.map((step) => step.after.text)).toContain("x = 45");
+    expect(trace.steps.at(-1)?.after.text).toBe("sqrt(45 + 4) = 7");
   });
 
   it("simplifies a radical by factoring out a perfect square", () => {
@@ -44,6 +79,17 @@ describe("solveAlgebra", () => {
       "sqrt(9 * 2)",
       "sqrt(9) * sqrt(2)",
       "3sqrt(2)",
+    ]);
+  });
+
+  it("simplifies a radical with an outside coefficient", () => {
+    const trace = solveAlgebra("2sqrt(8)");
+
+    expect(trace.result.value).toBe("4sqrt(2)");
+    expect(trace.steps.map((step) => step.after.text)).toEqual([
+      "2sqrt(4 * 2)",
+      "2 * sqrt(4) * sqrt(2)",
+      "4sqrt(2)",
     ]);
   });
 
@@ -58,4 +104,3 @@ describe("solveAlgebra", () => {
     ]);
   });
 });
-

@@ -5,6 +5,12 @@ type Linear = {
   constant: Rational;
 };
 
+type Polynomial = {
+  squareCoefficient: Rational;
+  coefficient: Rational;
+  constant: Rational;
+};
+
 type Token =
   | { type: "number"; value: string }
   | { type: "variable"; value: string }
@@ -138,7 +144,7 @@ export function solveAlgebra(input: string): SolveTrace {
 
   return unsupported(
     input,
-    "This first version supports linear equations, x^2 = a, sqrt(x) = a, and sqrt(n) simplification.",
+    "This version supports linear equations, square equations shaped like ax^2 + c = d, square-root equations with a linear radicand, and square-root simplification.",
   );
 }
 
@@ -191,7 +197,7 @@ function trySolveLinearEquation(input: string): SolveTrace | null {
       steps.push({
         before: previous,
         after,
-        operation: `${operationPhrase(workingRight.coefficient.negate(), "x")} from both sides`,
+        operation: bothSidesOperation(workingRight.coefficient.negate(), "x"),
         reason:
           "Adding or subtracting the same variable term on both sides creates an equivalent equation.",
         rule: "linear.moveVariableTerms",
@@ -215,7 +221,7 @@ function trySolveLinearEquation(input: string): SolveTrace | null {
       steps.push({
         before: previous,
         after,
-        operation: `${operationPhrase(workingLeft.constant.negate())} from both sides`,
+        operation: bothSidesOperation(workingLeft.constant.negate()),
         reason:
           "Adding or subtracting the same constant on both sides creates an equivalent equation.",
         rule: "linear.moveConstants",
@@ -243,17 +249,19 @@ function trySolveLinearEquation(input: string): SolveTrace | null {
     }
 
     const solution = workingRight.constant.divide(workingLeft.coefficient);
-    const after = statement(`x = ${solution.format()}`);
     const coefficient = workingLeft.coefficient;
-    steps.push({
-      before: previous,
-      after,
-      operation: `${dividePhrase(coefficient)} on both sides`,
-      reason:
-        "Dividing both sides by the same nonzero number creates an equivalent equation.",
-      rule: "linear.divideCoefficient",
-      standardCodes: ["A1.REI.A.1"],
-    });
+    if (!coefficient.isOne()) {
+      const after = statement(`x = ${solution.format()}`);
+      steps.push({
+        before: previous,
+        after,
+        operation: `${dividePhrase(coefficient)} on both sides`,
+        reason:
+          "Dividing both sides by the same nonzero number creates an equivalent equation.",
+        rule: "linear.divideCoefficient",
+        standardCodes: ["A1.REI.A.1"],
+      });
+    }
 
     return {
       input,
@@ -273,24 +281,192 @@ function trySolveLinearEquation(input: string): SolveTrace | null {
 }
 
 function trySolveSquareEquation(input: string): SolveTrace | null {
-  const match = input.match(/^x\^2=(-?\d+)$/);
-  if (!match) {
+  if (!input.includes("=") || !input.includes("^2")) {
     return null;
   }
 
-  const value = Number(match[1]);
-  const steps: SolveStep[] = [];
+  const [leftRaw, rightRaw, extra] = input.split("=");
+  if (extra !== undefined || leftRaw === undefined || rightRaw === undefined) {
+    return null;
+  }
 
-  if (value < 0) {
+  try {
+    const left = parsePolynomial(leftRaw);
+    const right = parsePolynomial(rightRaw);
+    let workingLeft = left;
+    let workingRight = right;
+    const normalizedEquation = formatPolynomialEquation(workingLeft, workingRight);
+    const needsSimplification = normalizeInput(normalizedEquation) !== input;
+    const steps: SolveStep[] = [];
+    let previous = statement(
+      needsSimplification ? prettifyRawEquation(input) : normalizedEquation,
+    );
+
+    if (needsSimplification) {
+      const after = statement(normalizedEquation);
+      steps.push({
+        before: previous,
+        after,
+        operation: "Simplify each side",
+        reason:
+          "Rewriting each side in equivalent simplified form keeps the same solution set.",
+        rule: "square.simplify",
+        standardCodes: ["A1.REI.A.1", "A1.SSE.A.2"],
+      });
+      previous = after;
+    }
+
+    if (!workingRight.squareCoefficient.isZero()) {
+      const newLeft: Polynomial = {
+        squareCoefficient: workingLeft.squareCoefficient.subtract(
+          workingRight.squareCoefficient,
+        ),
+        coefficient: workingLeft.coefficient,
+        constant: workingLeft.constant,
+      };
+      const newRight: Polynomial = {
+        squareCoefficient: Rational.zero(),
+        coefficient: workingRight.coefficient,
+        constant: workingRight.constant,
+      };
+      const after = statement(formatPolynomialEquation(newLeft, newRight));
+      steps.push({
+        before: previous,
+        after,
+        operation: bothSidesOperation(
+          workingRight.squareCoefficient.negate(),
+          "x^2",
+        ),
+        reason:
+          "Adding or subtracting the same square term on both sides creates an equivalent equation.",
+        rule: "square.moveSquareTerms",
+        standardCodes: ["A1.REI.A.1"],
+      });
+      workingLeft = newLeft;
+      workingRight = newRight;
+      previous = after;
+    }
+
+    const combinedLinearCoefficient = workingLeft.coefficient.subtract(
+      workingRight.coefficient,
+    );
+    if (!combinedLinearCoefficient.isZero()) {
+      return null;
+    }
+
+    if (!workingLeft.coefficient.isZero() || !workingRight.coefficient.isZero()) {
+      return null;
+    }
+
+    if (!workingLeft.constant.isZero()) {
+      const newLeft: Polynomial = {
+        squareCoefficient: workingLeft.squareCoefficient,
+        coefficient: Rational.zero(),
+        constant: Rational.zero(),
+      };
+      const newRight: Polynomial = {
+        squareCoefficient: Rational.zero(),
+        coefficient: Rational.zero(),
+        constant: workingRight.constant.subtract(workingLeft.constant),
+      };
+      const after = statement(formatPolynomialEquation(newLeft, newRight));
+      steps.push({
+        before: previous,
+        after,
+        operation: bothSidesOperation(workingLeft.constant.negate()),
+        reason:
+          "Adding or subtracting the same constant on both sides creates an equivalent equation.",
+        rule: "square.moveConstants",
+        standardCodes: ["A1.REI.A.1"],
+      });
+      workingLeft = newLeft;
+      workingRight = newRight;
+      previous = after;
+    }
+
+    if (workingLeft.squareCoefficient.isZero()) {
+      return null;
+    }
+
+    if (!workingLeft.squareCoefficient.isOne()) {
+      const newRight: Polynomial = {
+        squareCoefficient: Rational.zero(),
+        coefficient: Rational.zero(),
+        constant: workingRight.constant.divide(workingLeft.squareCoefficient),
+      };
+      const newLeft: Polynomial = {
+        squareCoefficient: Rational.one(),
+        coefficient: Rational.zero(),
+        constant: Rational.zero(),
+      };
+      const after = statement(formatPolynomialEquation(newLeft, newRight));
+      steps.push({
+        before: previous,
+        after,
+        operation: `${dividePhrase(workingLeft.squareCoefficient)} on both sides`,
+        reason:
+          "Dividing both sides by the same nonzero number creates an equivalent equation.",
+        rule: "square.divideCoefficient",
+        standardCodes: ["A1.REI.A.1"],
+      });
+      workingLeft = newLeft;
+      workingRight = newRight;
+      previous = after;
+    }
+
+    const radicand = workingRight.constant;
+    if (radicand.denominator !== 1) {
+      return null;
+    }
+
+    const squareRootSteps = buildSquareRootPropertySteps(
+      previous,
+      radicand.numerator,
+    );
+
     return {
       input,
       title: "Square equation",
       topic: "Square root property",
       course: "algebra1",
-      standardCodes: ["A1.REI.A.2"],
+      standardCodes: ["A1.REI.A.2", "A1.NQ.A.2"],
+      steps: [...steps, ...squareRootSteps.steps],
+      result: {
+        kind: "solution",
+        value: squareRootSteps.result,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildSquareRootPropertySteps(
+  previous: MathStatement,
+  value: number,
+): { steps: SolveStep[]; result: string } {
+  if (value === 0) {
+    const after = statement("x = 0");
+    return {
       steps: [
         {
-          before: statement(input),
+          before: previous,
+          after,
+          operation: "Take the square root of both sides",
+          reason: "Zero has only one square root, so x equals 0.",
+          rule: "square.zeroRoot",
+          standardCodes: ["A1.REI.A.2"],
+        },
+      ],
+      result: "x = 0",
+    };
+  }
+
+  if (value < 0) {
+    return {
+      steps: [
+        {
+          before: previous,
           after: statement("no real solution"),
           operation: "Compare to squares of real numbers",
           reason:
@@ -299,41 +475,41 @@ function trySolveSquareEquation(input: string): SolveTrace | null {
           standardCodes: ["A1.REI.A.2"],
         },
       ],
-      result: {
-        kind: "solution",
-        value: "no real solution",
-      },
+      result: "no real solution",
     };
   }
 
   const first = statement(`x = +/-sqrt(${value})`);
-  steps.push({
-    before: statement(input),
-    after: first,
-    operation: "Take the square root of both sides",
-    reason:
-      "The square root property gives two possible real values when x squared equals a positive number.",
-    rule: "square.squareRootProperty",
-    standardCodes: ["A1.REI.A.2"],
-  });
+  const steps: SolveStep[] = [
+    {
+      before: previous,
+      after: first,
+      operation: "Take the square root of both sides",
+      reason:
+        "The square root property gives two possible real values when x squared equals a positive number.",
+      rule: "square.squareRootProperty",
+      standardCodes: ["A1.REI.A.2"],
+    },
+  ];
 
   const simplified = simplifySquareRoot(value);
-  const second = statement(`x = +/-${simplified}`);
-  steps.push({
-    before: first,
-    after: second,
-    operation: "Simplify the square root",
-    reason: "Rewrite the radical using perfect-square factors when possible.",
-    rule: "radical.simplify",
-    standardCodes: ["A1.NQ.A.2"],
-  });
+  let current = first;
+  if (simplified !== `sqrt(${value})`) {
+    const second = statement(`x = +/-${simplified}`);
+    steps.push({
+      before: first,
+      after: second,
+      operation: "Simplify the square root",
+      reason: "Rewrite the radical using perfect-square factors when possible.",
+      rule: "radical.simplify",
+      standardCodes: ["A1.NQ.A.2"],
+    });
+    current = second;
+  }
 
-  const finalValue =
-    simplified.match(/^\d+$/) !== null
-      ? `x = ${simplified} or x = -${simplified}`
-      : `x = ${simplified} or x = -${simplified}`;
+  const finalValue = `x = ${simplified} or x = -${simplified}`;
   steps.push({
-    before: second,
+    before: current,
     after: statement(finalValue),
     operation: "Write both solutions",
     reason: "Both the positive and negative values square to the same number.",
@@ -341,27 +517,21 @@ function trySolveSquareEquation(input: string): SolveTrace | null {
     standardCodes: ["A1.REI.A.2"],
   });
 
-  return {
-    input,
-    title: "Square equation",
-    topic: "Square root property",
-    course: "algebra1",
-    standardCodes: ["A1.REI.A.2", "A1.NQ.A.2"],
-    steps,
-    result: {
-      kind: "solution",
-      value: finalValue,
-    },
-  };
+  return { steps, result: finalValue };
 }
 
 function trySolveSquareRootEquation(input: string): SolveTrace | null {
-  const match = input.match(/^(?:sqrt\((x)\)|√x)=(-?\d+)$/);
+  const match = input.match(/^sqrt\((.+)\)=(-?\d+)$/) ?? input.match(/^√x=(-?\d+)$/);
   if (!match) {
     return null;
   }
 
-  const value = Number(match[2]);
+  const radicandRaw = match.length === 3 ? match[1] : "x";
+  const value = Number(match.length === 3 ? match[2] : match[1]);
+  if (radicandRaw === undefined || Number.isNaN(value)) {
+    return null;
+  }
+
   if (value < 0) {
     return {
       input,
@@ -387,17 +557,19 @@ function trySolveSquareRootEquation(input: string): SolveTrace | null {
     };
   }
 
-  const squared = value * value;
-  const first = statement(`x = ${squared}`);
-  const check = statement(`sqrt(${squared}) = ${value}`);
+  try {
+    const radicand = parseLinear(radicandRaw);
+    if (radicand.coefficient.isZero()) {
+      return null;
+    }
 
-  return {
-    input,
-    title: "Square-root equation",
-    topic: "Square both sides",
-    course: "algebra1",
-    standardCodes: ["A1.NQ.A.2", "A1.REI.A.1"],
-    steps: [
+    const squared = new Rational(value * value);
+    const radicandText = formatLinear(radicand);
+    const first = statement(`${radicandText} = ${squared.format()}`);
+    const solution = squared.subtract(radicand.constant).divide(
+      radicand.coefficient,
+    );
+    const steps: SolveStep[] = [
       {
         before: statement(input),
         after: first,
@@ -407,32 +579,62 @@ function trySolveSquareRootEquation(input: string): SolveTrace | null {
         rule: "sqrt.squareBothSides",
         standardCodes: ["A1.REI.A.1", "A1.NQ.A.2"],
       },
-      {
-        before: first,
-        after: check,
-        operation: "Check the solution",
-        reason:
-          "Substituting the value back into the original equation confirms it works.",
-        rule: "sqrt.checkSolution",
-        standardCodes: ["A1.REI.A.1"],
+    ];
+
+    const linearTrace = trySolveLinearEquation(
+      `${radicandText}=${squared.format()}`,
+    );
+    if (linearTrace?.result.kind === "solution") {
+      steps.push(...linearTrace.steps);
+    }
+
+    const finalValue = `x = ${solution.format()}`;
+    const check = statement(
+      `sqrt(${formatLinearSubstitution(radicand, solution)}) = ${value}`,
+    );
+
+    steps.push({
+      before: statement(finalValue),
+      after: check,
+      operation: "Check the solution",
+      reason:
+        "Substituting the value back into the original equation confirms it works.",
+      rule: "sqrt.checkSolution",
+      standardCodes: ["A1.REI.A.1"],
+    });
+
+    return {
+      input,
+      title: "Square-root equation",
+      topic: "Square both sides",
+      course: "algebra1",
+      standardCodes: ["A1.NQ.A.2", "A1.REI.A.1"],
+      steps,
+      result: {
+        kind: "solution",
+        value: finalValue,
       },
-    ],
-    result: {
-      kind: "solution",
-      value: `x = ${squared}`,
-    },
-  };
+    };
+  } catch {
+    return null;
+  }
 }
 
 function trySolveRadicalSimplification(input: string): SolveTrace | null {
-  const match = input.match(/^(?:sqrt\((\d+)\)|√(\d+))$/);
+  const match = input.match(/^(-?\d*)?(?:sqrt\((\d+)\)|√(\d+))$/);
   if (!match) {
     return null;
   }
 
-  const radicand = Number(match[1] ?? match[2]);
+  const coefficient = parseOptionalCoefficient(match[1] ?? "");
+  const radicand = Number(match[2] ?? match[3]);
+  if (Number.isNaN(coefficient) || Number.isNaN(radicand)) {
+    return null;
+  }
+
   const factor = largestPerfectSquareFactor(radicand);
   const remaining = radicand / factor;
+  const prefix = formatRadicalCoefficient(coefficient);
 
   if (factor === 1) {
     return {
@@ -444,17 +646,24 @@ function trySolveRadicalSimplification(input: string): SolveTrace | null {
       steps: [],
       result: {
         kind: "solution",
-        value: `sqrt(${radicand})`,
+        value: `${prefix}sqrt(${radicand})`,
       },
     };
   }
 
   const rootFactor = Math.sqrt(factor);
+  const finalCoefficient = coefficient * rootFactor;
   const finalValue =
-    remaining === 1 ? String(rootFactor) : `${rootFactor}sqrt(${remaining})`;
+    remaining === 1
+      ? String(finalCoefficient)
+      : `${formatRadicalCoefficient(finalCoefficient)}sqrt(${remaining})`;
 
-  const first = statement(`sqrt(${factor} * ${remaining})`);
-  const second = statement(`sqrt(${factor}) * sqrt(${remaining})`);
+  const first = statement(`${prefix}sqrt(${factor} * ${remaining})`);
+  const second = statement(
+    coefficient === 1
+      ? `sqrt(${factor}) * sqrt(${remaining})`
+      : `${coefficient} * sqrt(${factor}) * sqrt(${remaining})`,
+  );
   const third = statement(finalValue);
 
   return {
@@ -499,16 +708,28 @@ function trySolveRadicalSimplification(input: string): SolveTrace | null {
 }
 
 function parseLinear(input: string): Linear {
-  const parser = new LinearParser(tokenize(input));
+  const polynomial = parsePolynomial(input);
+  if (!polynomial.squareCoefficient.isZero()) {
+    throw new Error("Expected a linear expression.");
+  }
+
+  return {
+    coefficient: polynomial.coefficient,
+    constant: polynomial.constant,
+  };
+}
+
+function parsePolynomial(input: string): Polynomial {
+  const parser = new PolynomialParser(tokenize(input));
   return parser.parse();
 }
 
-class LinearParser {
+class PolynomialParser {
   private index = 0;
 
   constructor(private readonly tokens: Token[]) {}
 
-  parse(): Linear {
+  parse(): Polynomial {
     const expression = this.parseExpression();
     if (this.peek()) {
       throw new Error("Unexpected token.");
@@ -516,7 +737,7 @@ class LinearParser {
     return expression;
   }
 
-  private parseExpression(): Linear {
+  private parseExpression(): Polynomial {
     let left = this.parseTerm();
 
     while (this.matchOperator("+") || this.matchOperator("-")) {
@@ -524,14 +745,14 @@ class LinearParser {
       const right = this.parseTerm();
       left =
         operator === "+"
-          ? addLinear(left, right)
-          : subtractLinear(left, right);
+          ? addPolynomial(left, right)
+          : subtractPolynomial(left, right);
     }
 
     return left;
   }
 
-  private parseTerm(): Linear {
+  private parseTerm(): Polynomial {
     let left = this.parseFactor();
 
     while (true) {
@@ -547,19 +768,22 @@ class LinearParser {
       }
 
       const right = this.parseFactor();
-      left = operator === "/" ? divideLinear(left, right) : multiplyLinear(left, right);
+      left =
+        operator === "/"
+          ? dividePolynomial(left, right)
+          : multiplyPolynomial(left, right);
     }
 
     return left;
   }
 
-  private parseFactor(): Linear {
+  private parseFactor(): Polynomial {
     if (this.matchOperator("+")) {
       return this.parseFactor();
     }
 
     if (this.matchOperator("-")) {
-      return negateLinear(this.parseFactor());
+      return negatePolynomial(this.parseFactor());
     }
 
     if (this.matchParen("(")) {
@@ -575,13 +799,28 @@ class LinearParser {
 
     if (token.type === "number") {
       return {
+        squareCoefficient: Rational.zero(),
         coefficient: Rational.zero(),
         constant: Rational.fromString(token.value),
       };
     }
 
     if (token.type === "variable" && token.value === "x") {
+      if (this.matchOperator("^")) {
+        const exponent = this.advance();
+        if (exponent?.type !== "number" || exponent.value !== "2") {
+          throw new Error("Only x^2 is supported.");
+        }
+
+        return {
+          squareCoefficient: Rational.one(),
+          coefficient: Rational.zero(),
+          constant: Rational.zero(),
+        };
+      }
+
       return {
+        squareCoefficient: Rational.zero(),
         coefficient: Rational.one(),
         constant: Rational.zero(),
       };
@@ -689,60 +928,87 @@ function tokenize(input: string): Token[] {
   return tokens;
 }
 
-function addLinear(left: Linear, right: Linear): Linear {
+function addPolynomial(left: Polynomial, right: Polynomial): Polynomial {
   return {
+    squareCoefficient: left.squareCoefficient.add(right.squareCoefficient),
     coefficient: left.coefficient.add(right.coefficient),
     constant: left.constant.add(right.constant),
   };
 }
 
-function subtractLinear(left: Linear, right: Linear): Linear {
+function subtractPolynomial(left: Polynomial, right: Polynomial): Polynomial {
   return {
+    squareCoefficient: left.squareCoefficient.subtract(right.squareCoefficient),
     coefficient: left.coefficient.subtract(right.coefficient),
     constant: left.constant.subtract(right.constant),
   };
 }
 
-function negateLinear(value: Linear): Linear {
+function negatePolynomial(value: Polynomial): Polynomial {
   return {
+    squareCoefficient: value.squareCoefficient.negate(),
     coefficient: value.coefficient.negate(),
     constant: value.constant.negate(),
   };
 }
 
-function multiplyLinear(left: Linear, right: Linear): Linear {
-  if (isConstant(left)) {
-    return scaleLinear(right, left.constant);
+function multiplyPolynomial(left: Polynomial, right: Polynomial): Polynomial {
+  if (isConstantPolynomial(left)) {
+    return scalePolynomial(right, left.constant);
   }
 
-  if (isConstant(right)) {
-    return scaleLinear(left, right.constant);
+  if (isConstantPolynomial(right)) {
+    return scalePolynomial(left, right.constant);
   }
 
   throw new Error("Nonlinear multiplication is not supported.");
 }
 
-function divideLinear(left: Linear, right: Linear): Linear {
-  if (!isConstant(right)) {
+function dividePolynomial(left: Polynomial, right: Polynomial): Polynomial {
+  if (!isConstantPolynomial(right)) {
     throw new Error("Can only divide by a constant.");
   }
 
-  return scaleLinear(left, Rational.one().divide(right.constant));
+  return scalePolynomial(left, Rational.one().divide(right.constant));
 }
 
-function scaleLinear(value: Linear, scalar: Rational): Linear {
+function scalePolynomial(value: Polynomial, scalar: Rational): Polynomial {
   return {
+    squareCoefficient: value.squareCoefficient.multiply(scalar),
     coefficient: value.coefficient.multiply(scalar),
     constant: value.constant.multiply(scalar),
   };
 }
 
-function isConstant(value: Linear) {
-  return value.coefficient.isZero();
+function isConstantPolynomial(value: Polynomial) {
+  return value.squareCoefficient.isZero() && value.coefficient.isZero();
 }
 
 function formatEquation(left: Linear, right: Linear) {
   return `${formatLinear(left)} = ${formatLinear(right)}`;
+}
+
+function formatPolynomialEquation(left: Polynomial, right: Polynomial) {
+  return `${formatPolynomial(left)} = ${formatPolynomial(right)}`;
+}
+
+function formatPolynomial(value: Polynomial) {
+  const squareCoefficient = value.squareCoefficient;
+  const parts: string[] = [];
+
+  if (!squareCoefficient.isZero()) {
+    parts.push(formatTerm(squareCoefficient, "x^2", parts.length === 0));
+  }
+
+  if (!value.coefficient.isZero()) {
+    parts.push(formatTerm(value.coefficient, "x", parts.length === 0));
+  }
+
+  if (!value.constant.isZero()) {
+    parts.push(formatTerm(value.constant, "", parts.length === 0));
+  }
+
+  return parts.length > 0 ? parts.join(" ") : "0";
 }
 
 function formatLinear(value: Linear) {
@@ -773,12 +1039,55 @@ function formatLinear(value: Linear) {
   return parts.length > 0 ? parts.join(" ") : "0";
 }
 
+function formatTerm(value: Rational, variable: string, first: boolean) {
+  const sign = value.isNegative() ? "-" : "+";
+  const magnitude = value.abs();
+  const body =
+    variable && magnitude.isOne()
+      ? variable
+      : variable
+        ? `${magnitude.format()}${variable}`
+        : magnitude.format();
+
+  if (first) {
+    return value.isNegative() ? `-${body}` : body;
+  }
+
+  return `${sign} ${body}`;
+}
+
+function formatLinearSubstitution(expression: Linear, value: Rational) {
+  const terms: string[] = [];
+
+  if (!expression.coefficient.isZero()) {
+    if (expression.coefficient.isOne()) {
+      terms.push(value.format());
+    } else if (expression.coefficient.isNegativeOne()) {
+      terms.push(`-${value.format()}`);
+    } else {
+      terms.push(`${expression.coefficient.format()}(${value.format()})`);
+    }
+  }
+
+  if (!expression.constant.isZero()) {
+    terms.push(formatTerm(expression.constant, "", terms.length === 0));
+  }
+
+  return terms.join(" ") || "0";
+}
+
 function operationPhrase(value: Rational, suffix = "") {
   const formatted = `${value.abs().format()}${suffix}`;
   if (value.isNegative()) {
     return `Subtract ${formatted}`;
   }
   return `Add ${formatted}`;
+}
+
+function bothSidesOperation(value: Rational, suffix = "") {
+  return `${operationPhrase(value, suffix)} ${
+    value.isNegative() ? "from" : "to"
+  } both sides`;
 }
 
 function dividePhrase(value: Rational) {
@@ -790,6 +1099,10 @@ function dividePhrase(value: Rational) {
 }
 
 function simplifySquareRoot(value: number) {
+  if (value === 0) {
+    return "0";
+  }
+
   const factor = largestPerfectSquareFactor(value);
   const remaining = value / factor;
   const rootFactor = Math.sqrt(factor);
@@ -803,6 +1116,30 @@ function simplifySquareRoot(value: number) {
   }
 
   return `${rootFactor}sqrt(${remaining})`;
+}
+
+function parseOptionalCoefficient(value: string) {
+  if (!value) {
+    return 1;
+  }
+
+  if (value === "-") {
+    return -1;
+  }
+
+  return Number(value);
+}
+
+function formatRadicalCoefficient(value: number) {
+  if (value === 1) {
+    return "";
+  }
+
+  if (value === -1) {
+    return "-";
+  }
+
+  return String(value);
 }
 
 function largestPerfectSquareFactor(value: number) {

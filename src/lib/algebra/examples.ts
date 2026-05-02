@@ -12,12 +12,31 @@ export const EXAMPLE_PROBLEMS = [
     label: "square root property",
   },
   {
+    input: "x^2 + 5 = 54",
+    label: "isolate square",
+  },
+  {
+    input: "4x^2 = 100",
+    label: "divide square coefficient",
+  },
+  {
+    input: "x^2 - 9 = 0",
+    label: "zero-product shape",
+  },
+  {
     input: "sqrt(x) = 5",
     label: "square both sides",
+  },
+  {
+    input: "sqrt(x + 4) = 7",
+    label: "radical equation",
   },
   {
     input: "sqrt(18)",
     label: "simplify radical",
   },
+  {
+    input: "2sqrt(8)",
+    label: "coefficient radical",
+  },
 ] as const;
-
