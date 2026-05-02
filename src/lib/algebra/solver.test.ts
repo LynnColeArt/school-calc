@@ -22,6 +22,38 @@ describe("solveAlgebra", () => {
     expect(trace.steps.map((step) => step.after.text)).toContain("2x + 6 = 14");
   });
 
+  it("combines like terms in a polynomial expression and writes standard form", () => {
+    const trace = solveAlgebra("2x + 3x - 4 + x^2");
+
+    expect(trace.result.value).toBe("x^2 + 5x - 4");
+    expect(trace.topic).toBe("Polynomial simplification");
+    expect(trace.steps.map((step) => step.after.text)).toEqual(["x^2 + 5x - 4"]);
+  });
+
+  it("expands a product of binomials into a quadratic", () => {
+    const trace = solveAlgebra("(x + 2)(x + 3)");
+
+    expect(trace.result.value).toBe("x^2 + 5x + 6");
+    expect(trace.topic).toBe("Polynomial simplification");
+    expect(trace.steps.map((step) => step.after.text)).toEqual(["x^2 + 5x + 6"]);
+  });
+
+  it("factors a quadratic polynomial expression", () => {
+    const trace = solveAlgebra("x^2 + 5x + 6");
+
+    expect(trace.result.value).toBe("(x + 2)(x + 3)");
+    expect(trace.topic).toBe("Factoring");
+    expect(trace.steps.map((step) => step.after.text)).toEqual(["(x + 2)(x + 3)"]);
+  });
+
+  it("factors out a common factor when a quadratic does not split into binomials", () => {
+    const trace = solveAlgebra("2x^2 + 4x + 6");
+
+    expect(trace.result.value).toBe("2(x^2 + 2x + 3)");
+    expect(trace.topic).toBe("Factoring");
+    expect(trace.steps.map((step) => step.after.text)).toEqual(["2(x^2 + 2x + 3)"]);
+  });
+
   it("solves a square equation with the square root property", () => {
     const trace = solveAlgebra("x^2 = 49");
 

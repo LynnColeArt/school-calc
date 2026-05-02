@@ -157,6 +157,12 @@ export function solveAlgebra(input: string): SolveTrace {
     return radicalTrace;
   }
 
+  const polynomialExpressionTrace =
+    trySolvePolynomialExpression(normalizedInput);
+  if (polynomialExpressionTrace) {
+    return polynomialExpressionTrace;
+  }
+
   const squareRootEquationTrace =
     trySolveSquareRootEquation(normalizedInput);
   if (squareRootEquationTrace) {
@@ -180,7 +186,7 @@ export function solveAlgebra(input: string): SolveTrace {
 
   return unsupported(
     input,
-    "This version supports linear equations, quadratics, square-root equations with a linear radicand, and square-root simplification.",
+    "This version supports polynomial expressions, linear equations, quadratics, square-root equations with a linear radicand, and square-root simplification.",
   );
 }
 
@@ -1849,6 +1855,89 @@ function trySolveSingleRadicalSimplification(
   };
 }
 
+function trySolvePolynomialExpression(input: string): SolveTrace | null {
+  if (
+    input.includes("=") ||
+    input.includes("sqrt") ||
+    input.includes("√") ||
+    input.includes(",") ||
+    input.startsWith("y") ||
+    input.startsWith("points") ||
+    input.startsWith("parallel") ||
+    input.startsWith("perpendicular") ||
+    input.includes("a_n")
+  ) {
+    return null;
+  }
+
+  let polynomial: Polynomial;
+  try {
+    polynomial = parsePolynomial(input);
+  } catch {
+    return null;
+  }
+
+  if (polynomial.squareCoefficient.isZero() && polynomial.coefficient.isZero()) {
+    return null;
+  }
+
+  const standards = ["A1.SSE.A.2"];
+  const standardForm = formatPolynomial(polynomial);
+  const steps: SolveStep[] = [];
+  let previous = statement(input);
+  let topic = "Polynomial expressions";
+
+  if (normalizeInput(standardForm) !== input) {
+    const after = statement(standardForm);
+    steps.push({
+      before: previous,
+      after,
+      operation: "Simplify the polynomial",
+      reason:
+        input.includes("(") || input.includes("*")
+          ? "Use the distributive property, combine like terms, and write the result in standard form."
+          : "Combine like terms and write the result in standard form.",
+      rule: "polynomial.simplify",
+      standardCodes: standards,
+    });
+    previous = after;
+    topic = "Polynomial simplification";
+  }
+
+  const factored = factorPolynomialExpression(polynomial);
+  if (
+    factored !== null &&
+    normalizeInput(standardForm) === input &&
+    normalizeInput(factored) !== normalizeInput(previous.text)
+  ) {
+    const after = statement(factored);
+    steps.push({
+      before: previous,
+      after,
+      operation: "Factor the polynomial",
+      reason:
+        "Pull out any greatest common factor first, then rewrite the quadratic as a product when the factors match the leading and constant terms.",
+      rule: "polynomial.factor",
+      standardCodes: standards,
+    });
+    previous = after;
+    topic = "Factoring";
+  }
+
+  return {
+    input: steps.length === 0 ? standardForm : input,
+    title: "Polynomial expression",
+    topic,
+    course: "algebra1",
+    standardCodes: standards,
+    steps,
+    result: {
+      kind: "solution",
+      value: previous.text === input ? standardForm : previous.text,
+    },
+  };
+}
+
 function parseLinear(input: string): Linear {
   const polynomial = parsePolynomial(input);
   if (!polynomial.squareCoefficient.isZero()) {
@@ -2095,15 +2184,25 @@ function negatePolynomial(value: Polynomial): Polynomial {
 }
 
 function multiplyPolynomial(left: Polynomial, right: Polynomial): Polynomial {
-  if (isConstantPolynomial(left)) {
-    return scalePolynomial(right, left.constant);
+  const xToFourth = left.squareCoefficient.multiply(right.squareCoefficient);
+  const xCubed = left.squareCoefficient
+    .multiply(right.coefficient)
+    .add(left.coefficient.multiply(right.squareCoefficient));
+
+  if (!xToFourth.isZero() || !xCubed.isZero()) {
+    throw new Error("Polynomial degree above 2 is not supported.");
   }
 
-  if (isConstantPolynomial(right)) {
-    return scalePolynomial(left, right.constant);
-  }
-
-  throw new Error("Nonlinear multiplication is not supported.");
+  return {
+    squareCoefficient: left.squareCoefficient
+      .multiply(right.constant)
+      .add(left.coefficient.multiply(right.coefficient))
+      .add(left.constant.multiply(right.squareCoefficient)),
+    coefficient: left.coefficient
+      .multiply(right.constant)
+      .add(left.constant.multiply(right.coefficient)),
+    constant: left.constant.multiply(right.constant),
+  };
 }
 
 function dividePolynomial(left: Polynomial, right: Polynomial): Polynomial {
@@ -3215,6 +3314,51 @@ function formatGeneralBinomialFactor(value: { xCoeff: number; constant: number }
   }
 
   return `(${coefficient} - ${Math.abs(value.constant)})`;
+}
+
+function factorPolynomialExpression(value: Polynomial) {
+  if (
+    value.squareCoefficient.isZero() ||
+    value.squareCoefficient.denominator !== 1 ||
+    value.coefficient.denominator !== 1 ||
+    value.constant.denominator !== 1
+  ) {
+    return null;
+  }
+
+  const commonAbs = gcdMany([
+    Math.abs(value.squareCoefficient.numerator),
+    Math.abs(value.coefficient.numerator),
+    Math.abs(value.constant.numerator),
+  ]);
+  const commonFactor = value.squareCoefficient.numerator < 0 ? -commonAbs : commonAbs;
+  const reduced = scalePolynomial(value, new Rational(1, commonFactor));
+  const reducedText = formatPolynomial(reduced);
+  const integer = {
+    a: reduced.squareCoefficient.numerator,
+    b: reduced.coefficient.numerator,
+    c: reduced.constant.numerator,
+  };
+  const factors = factorIntegerQuadratic(integer);
+
+  let body = reducedText;
+  if (factors !== null) {
+    body = `${formatGeneralBinomialFactor(factors.left)}${formatGeneralBinomialFactor(
+      factors.right,
+    )}`;
+  }
+
+  if (commonFactor === 1) {
+    return body;
+  }
+
+  const needsGrouping = factors === null;
+
+  if (commonFactor === -1) {
+    return needsGrouping ? `-(${body})` : `-${body}`;
+  }
+
+  return needsGrouping ? `${commonFactor}(${body})` : `${commonFactor}${body}`;
 }
 
 function operationPhrase(value: Rational, suffix = "") {

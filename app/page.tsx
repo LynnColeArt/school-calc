@@ -110,13 +110,13 @@ export default function Home() {
               aria-label="Math problem"
               className="problem-input"
               onChange={(event) => setProblem(event.target.value)}
-              placeholder="Solve 3x + 5 = 26, graph y = x^2 - 4x + 3, use A(1, 2), B(5, 10) or parallel through P(3, 4) to y = 2x + 1, or enter a_n = 3a_(n - 1), a_1 = 2"
+              placeholder="Solve 3x + 5 = 26, simplify (x + 2)(x + 3), graph y = x^2 - 4x + 3, use A(1, 2), B(5, 10), or enter a_n = 3a_(n - 1), a_1 = 2"
               spellCheck={false}
               value={problem}
             />
             <div className="entry-hint">
               <strong>More than equations.</strong>
-              <span>Use y = ... for graphs, two coordinate points or parallel/perpendicular line prompts for geometry, or sequence terms and recursive rules.</span>
+              <span>Use expressions for polynomial simplification and factoring, y = ... for graphs, two coordinate points or parallel/perpendicular line prompts for geometry, or sequence terms and recursive rules.</span>
             </div>
             <div className="mode-row" aria-label="Output mode">
               {modeLabels.map((item) => (
@@ -223,7 +223,7 @@ export default function Home() {
           </div>
 
           <p className="notes">
-            First slice: equation solving, radicals, graphing, coordinate
+            First slice: equation solving, polynomials, radicals, graphing, coordinate
             geometry, and sequence rules.
           </p>
         </aside>

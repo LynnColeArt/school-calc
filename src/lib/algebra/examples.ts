@@ -4,6 +4,18 @@ export const EXAMPLE_PROBLEMS = [
     label: "linear",
   },
   {
+    input: "2x + 3x - 4 + x^2",
+    label: "combine like terms",
+  },
+  {
+    input: "(x + 2)(x + 3)",
+    label: "expand binomials",
+  },
+  {
+    input: "x^2 + 5x + 6",
+    label: "factor trinomial",
+  },
+  {
     input: "2(x + 3) = 14",
     label: "distribute",
   },
