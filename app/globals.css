@@ -727,6 +727,14 @@ button {
   stroke-linecap: round;
 }
 
+.geometry-reference-line {
+  fill: none;
+  stroke: #8a95a5;
+  stroke-width: 2;
+  stroke-dasharray: 10 8;
+  stroke-linecap: round;
+}
+
 .geometry-segment {
   stroke: var(--gold);
   stroke-width: 3.2;

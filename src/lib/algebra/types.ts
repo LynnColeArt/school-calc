@@ -138,5 +138,8 @@ export type GeometryAnalysis = {
   steps: RenderedLine[];
   points: GeometryPoint[];
   line: GeometryLine;
+  lineLabel?: string;
+  referenceLine?: GeometryLine;
+  referenceLineLabel?: string;
   window: GraphWindow;
 };

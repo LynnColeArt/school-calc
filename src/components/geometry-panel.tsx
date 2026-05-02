@@ -11,9 +11,9 @@ export function GeometryPanel({ geometry }: { geometry: GeometryAnalysis }) {
   const yTicks = buildTicks(geometry.window.yMin, geometry.window.yMax, tickStepY);
   const pointA = geometry.points[0];
   const pointB = geometry.points[1];
-  const midpoint = geometry.points[2];
+  const showSegment = geometry.referenceLine === undefined && !!pointA && !!pointB;
 
-  if (!pointA || !pointB || !midpoint) {
+  if (!pointA) {
     return null;
   }
 
@@ -24,7 +24,9 @@ export function GeometryPanel({ geometry }: { geometry: GeometryAnalysis }) {
           <h3>Coordinate Geometry</h3>
           <p>{geometry.summary}</p>
         </div>
-        <div className="sequence-kind">points</div>
+        <div className="sequence-kind">
+          {geometry.referenceLine ? "line relation" : "points"}
+        </div>
       </div>
 
       <div className="geometry-top">
@@ -101,14 +103,22 @@ export function GeometryPanel({ geometry }: { geometry: GeometryAnalysis }) {
               />
             )}
 
-            <path className="geometry-line" d={buildLinePath(geometry)} />
-            <line
-              className="geometry-segment"
-              x1={scaleX(pointA.x, geometry)}
-              x2={scaleX(pointB.x, geometry)}
-              y1={scaleY(pointA.y, geometry)}
-              y2={scaleY(pointB.y, geometry)}
-            />
+            {geometry.referenceLine && (
+              <path
+                className="geometry-reference-line"
+                d={buildLinePath(geometry.referenceLine, geometry)}
+              />
+            )}
+            <path className="geometry-line" d={buildLinePath(geometry.line, geometry)} />
+            {showSegment && pointB && (
+              <line
+                className="geometry-segment"
+                x1={scaleX(pointA.x, geometry)}
+                x2={scaleX(pointB.x, geometry)}
+                y1={scaleY(pointA.y, geometry)}
+                y2={scaleY(pointB.y, geometry)}
+              />
+            )}
 
             {geometry.points.map((point) => (
               <g key={`${point.role}-${point.label}`}>
@@ -154,16 +164,19 @@ export function GeometryPanel({ geometry }: { geometry: GeometryAnalysis }) {
   );
 }
 
-function buildLinePath(geometry: GeometryAnalysis) {
-  if (geometry.line.kind === "vertical") {
-    const x = scaleX(geometry.line.x, geometry);
+function buildLinePath(
+  line: GeometryAnalysis["line"],
+  geometry: GeometryAnalysis,
+) {
+  if (line.kind === "vertical") {
+    const x = scaleX(line.x, geometry);
     return `M${x} ${padding.top} L${x} ${viewBoxHeight - padding.bottom}`;
   }
 
   const leftX = geometry.window.xMin;
   const rightX = geometry.window.xMax;
-  const leftY = geometry.line.slope * leftX + geometry.line.intercept;
-  const rightY = geometry.line.slope * rightX + geometry.line.intercept;
+  const leftY = line.slope * leftX + line.intercept;
+  const rightY = line.slope * rightX + line.intercept;
   return `M${scaleX(leftX, geometry)} ${scaleY(leftY, geometry)} L${scaleX(rightX, geometry)} ${scaleY(rightY, geometry)}`;
 }
 

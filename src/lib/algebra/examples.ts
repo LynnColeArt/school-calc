@@ -80,6 +80,18 @@ export const EXAMPLE_PROBLEMS = [
     label: "vertical line",
   },
   {
+    input: "parallel through P(3, 4) to y = 2x + 1",
+    label: "parallel through a point",
+  },
+  {
+    input: "perpendicular through P(3, 4) to y = 2x + 1",
+    label: "perpendicular through a point",
+  },
+  {
+    input: "perpendicular through P(1, -2) to x = 3",
+    label: "perpendicular to vertical line",
+  },
+  {
     input: "2, 6, 18, 54",
     label: "geometric sequence",
   },

@@ -243,6 +243,11 @@ export function analyzeSequence(input: string): SequenceAnalysis | null {
 }
 
 export function analyzeCoordinateGeometry(input: string): GeometryAnalysis | null {
+  const relationship = parseLineRelationshipGeometry(input);
+  if (relationship !== null) {
+    return buildLineRelationshipGeometryAnalysis(relationship);
+  }
+
   const parsed = parseGeometryPoints(input);
   if (parsed === null) {
     return null;
@@ -340,6 +345,7 @@ export function analyzeCoordinateGeometry(input: string): GeometryAnalysis | nul
         kind: "vertical",
         x: rationalToNumber(pointA.x),
       },
+      lineLabel: lineEquation,
       window: buildPointWindow(points),
     };
   }
@@ -408,7 +414,221 @@ export function analyzeCoordinateGeometry(input: string): GeometryAnalysis | nul
       slope: rationalToNumber(slope),
       intercept: rationalToNumber(intercept),
     },
+    lineLabel: slopeInterceptForm,
     window: buildPointWindow(points),
+  };
+}
+
+function buildLineRelationshipGeometryAnalysis(input: {
+  relation: "parallel" | "perpendicular";
+  point: { label: string; x: Rational; y: Rational };
+  referenceLine:
+    | { kind: "regular"; slope: Rational; intercept: Rational; equation: string }
+    | { kind: "vertical"; x: Rational; equation: string };
+}): GeometryAnalysis {
+  const relationLabel =
+    input.relation === "parallel" ? "parallel" : "perpendicular";
+  const givenPoint: GeometryPoint = {
+    x: rationalToNumber(input.point.x),
+    y: rationalToNumber(input.point.y),
+    label: `${input.point.label}${formatCoordinate(
+      input.point.x.format(),
+      input.point.y.format(),
+    )}`,
+    role: "point",
+  };
+
+  if (input.referenceLine.kind === "vertical") {
+    const targetIsVertical = input.relation === "parallel";
+    const targetLine = targetIsVertical
+      ? {
+          kind: "vertical" as const,
+          x: rationalToNumber(input.point.x),
+        }
+      : {
+          kind: "regular" as const,
+          slope: 0,
+          intercept: rationalToNumber(input.point.y),
+        };
+    const targetLabel = targetIsVertical
+      ? `x = ${input.point.x.format()}`
+      : `y = ${input.point.y.format()}`;
+    const targetSlope = targetIsVertical ? "undefined" : "0";
+    const steps = [
+      {
+        math: `${input.point.label}${formatCoordinate(
+          input.point.x.format(),
+          input.point.y.format(),
+        )}, ${input.referenceLine.equation}`,
+        note: "Start with the given point and reference line.",
+      },
+      {
+        math: `given slope = undefined`,
+        note: "A vertical line has undefined slope.",
+      },
+      {
+        math: `new slope = ${targetSlope}`,
+        note:
+          input.relation === "parallel"
+            ? "Parallel to a vertical line means the new line is also vertical."
+            : "Perpendicular to a vertical line means the new line is horizontal.",
+      },
+      {
+        math: targetLabel,
+        note: "Write the new line through the given point.",
+      },
+    ];
+
+    return {
+      title: "Coordinate geometry",
+      topic: "Parallel and perpendicular lines",
+      summary: "Line relationships through a point",
+      standardCodes: ["G.GPE.B.5", "G.GPE.B.6"],
+      features: [
+        { label: "Relationship", value: relationLabel },
+        { label: "Given line", value: input.referenceLine.equation },
+        { label: "Given slope", value: "undefined" },
+        { label: "Through point", value: formatCoordinate(input.point.x.format(), input.point.y.format()) },
+        { label: "New slope", value: targetSlope },
+        { label: "New line", value: targetLabel },
+      ],
+      steps,
+      points: [givenPoint],
+      line: targetLine,
+      lineLabel: targetLabel,
+      referenceLine: {
+        kind: "vertical",
+        x: rationalToNumber(input.referenceLine.x),
+      },
+      referenceLineLabel: input.referenceLine.equation,
+      window: buildRelationshipWindow(
+        [givenPoint],
+        targetLine,
+        { kind: "vertical", x: rationalToNumber(input.referenceLine.x) },
+      ),
+    };
+  }
+
+  const givenSlope = input.referenceLine.slope;
+  const targetSlope =
+    input.relation === "parallel"
+      ? givenSlope
+      : givenSlope.isZero()
+        ? null
+        : new Rational(-givenSlope.denominator, givenSlope.numerator);
+
+  let line:
+    | { kind: "regular"; slope: number; intercept: number }
+    | { kind: "vertical"; x: number };
+  let targetLineLabel: string;
+  let pointSlopeLabel: string | null = null;
+  let newSlopeLabel: string;
+
+  if (input.relation === "perpendicular" && givenSlope.isZero()) {
+    line = {
+      kind: "vertical",
+      x: rationalToNumber(input.point.x),
+    };
+    targetLineLabel = `x = ${input.point.x.format()}`;
+    newSlopeLabel = "undefined";
+  } else if (targetSlope === null) {
+    throw new Error("Unexpected perpendicular slope.");
+  } else {
+    const intercept = input.point.y.subtract(targetSlope.multiply(input.point.x));
+    line = {
+      kind: "regular",
+      slope: rationalToNumber(targetSlope),
+      intercept: rationalToNumber(intercept),
+    };
+    pointSlopeLabel = formatPointSlopeEquation(
+      input.point.y,
+      targetSlope,
+      input.point.x,
+    );
+    targetLineLabel = `y = ${formatLinear({
+      coefficient: targetSlope,
+      constant: intercept,
+    })}`;
+    newSlopeLabel = targetSlope.format();
+  }
+
+  const steps = [
+    {
+      math: `${input.point.label}${formatCoordinate(
+        input.point.x.format(),
+        input.point.y.format(),
+      )}, ${input.referenceLine.equation}`,
+      note: "Start with the given point and reference line.",
+    },
+    {
+      math: `given slope = ${givenSlope.format()}`,
+      note: "Read the slope from the reference line.",
+    },
+    {
+      math: `new slope = ${newSlopeLabel}`,
+      note:
+        input.relation === "parallel"
+          ? "Parallel lines have the same slope."
+          : "Perpendicular slopes are negative reciprocals.",
+    },
+  ];
+
+  if (pointSlopeLabel) {
+    steps.push(
+      {
+        math: pointSlopeLabel,
+        note: "Use point-slope form with the given point.",
+      },
+      {
+        math: targetLineLabel,
+        note: "Rewrite the line in slope-intercept form.",
+      },
+    );
+  } else {
+    steps.push({
+      math: targetLineLabel,
+      note: "A vertical line through the point keeps x constant.",
+    });
+  }
+
+  return {
+    title: "Coordinate geometry",
+    topic: "Parallel and perpendicular lines",
+    summary: "Line relationships through a point",
+    standardCodes: ["G.GPE.B.5", "G.GPE.B.6"],
+    features: [
+      { label: "Relationship", value: relationLabel },
+      { label: "Given line", value: input.referenceLine.equation },
+      { label: "Given slope", value: givenSlope.format() },
+      {
+        label: "Through point",
+        value: formatCoordinate(input.point.x.format(), input.point.y.format()),
+      },
+      { label: "New slope", value: newSlopeLabel },
+      ...(pointSlopeLabel
+        ? [{ label: "Point-slope form", value: pointSlopeLabel }]
+        : []),
+      { label: pointSlopeLabel ? "Slope-intercept form" : "New line", value: targetLineLabel },
+    ],
+    steps,
+    points: [givenPoint],
+    line,
+    lineLabel: targetLineLabel,
+    referenceLine: {
+      kind: "regular",
+      slope: rationalToNumber(givenSlope),
+      intercept: rationalToNumber(input.referenceLine.intercept),
+    },
+    referenceLineLabel: input.referenceLine.equation,
+    window: buildRelationshipWindow(
+      [givenPoint],
+      line,
+      {
+        kind: "regular",
+        slope: rationalToNumber(givenSlope),
+        intercept: rationalToNumber(input.referenceLine.intercept),
+      },
+    ),
   };
 }
 
@@ -2150,6 +2370,64 @@ function buildProjectedSequenceTerms(
   return terms;
 }
 
+function parseLineRelationshipGeometry(input: string) {
+  const match = input
+    .trim()
+    .match(
+      /^(parallel|perpendicular)\s+through\s+([A-Za-z])?\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)\s+to\s+(.+)$/i,
+    );
+  if (!match?.[1] || !match[3] || !match[4] || !match[5]) {
+    return null;
+  }
+
+  try {
+    const referenceLine = parseGeometryLineEquation(match[5].trim());
+    return {
+      relation: match[1].toLowerCase() as "parallel" | "perpendicular",
+      point: {
+        label: match[2] ?? "P",
+        x: Rational.fromString(match[3].trim()),
+        y: Rational.fromString(match[4].trim()),
+      },
+      referenceLine,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseGeometryLineEquation(raw: string) {
+  const normalized = normalizeInput(raw);
+  const [leftRaw, rightRaw, extra] = normalized.split("=");
+  if (extra !== undefined || leftRaw === undefined || rightRaw === undefined) {
+    throw new Error("Unsupported line equation.");
+  }
+
+  if (leftRaw === "y") {
+    const linear = parseLinear(rightRaw);
+    return {
+      kind: "regular" as const,
+      slope: linear.coefficient,
+      intercept: linear.constant,
+      equation: `y = ${formatLinear(linear)}`,
+    };
+  }
+
+  if (leftRaw === "x") {
+    const constant = parseLinear(rightRaw);
+    if (!constant.coefficient.isZero()) {
+      throw new Error("Unsupported vertical line.");
+    }
+    return {
+      kind: "vertical" as const,
+      x: constant.constant,
+      equation: `x = ${constant.constant.format()}`,
+    };
+  }
+
+  throw new Error("Unsupported line equation.");
+}
+
 function buildSequenceTableFromTerms(terms: Rational[], givenCount: number) {
   return terms.map((term, index) => ({
     n: String(index + 1),
@@ -2244,6 +2522,51 @@ function buildPointWindow(points: GeometryPoint[]) {
     yMin: Math.floor(yMin - yPadding),
     yMax: Math.ceil(yMax + yPadding),
   };
+}
+
+function buildRelationshipWindow(
+  points: GeometryPoint[],
+  line: { kind: "regular"; slope: number; intercept: number } | { kind: "vertical"; x: number },
+  referenceLine:
+    | { kind: "regular"; slope: number; intercept: number }
+    | { kind: "vertical"; x: number },
+) {
+  const center = points[0] ?? { x: 0, y: 0, label: "", role: "point" as const };
+  const sampled = [
+    ...sampleLinePoints(line, center.x, center.y),
+    ...sampleLinePoints(referenceLine, center.x, center.y),
+  ];
+  return buildPointWindow([...points, ...sampled]);
+}
+
+function sampleLinePoints(
+  line: { kind: "regular"; slope: number; intercept: number } | { kind: "vertical"; x: number },
+  centerX: number,
+  centerY: number,
+): GeometryPoint[] {
+  if (line.kind === "vertical") {
+    return [
+      { x: line.x, y: centerY - 3, label: "", role: "point" },
+      { x: line.x, y: centerY + 3, label: "", role: "point" },
+    ];
+  }
+
+  const leftX = centerX - 3;
+  const rightX = centerX + 3;
+  return [
+    {
+      x: leftX,
+      y: line.slope * leftX + line.intercept,
+      label: "",
+      role: "point",
+    },
+    {
+      x: rightX,
+      y: line.slope * rightX + line.intercept,
+      label: "",
+      role: "point",
+    },
+  ];
 }
 
 function formatSequenceTerms(terms: Rational[]) {

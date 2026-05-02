@@ -31,6 +31,54 @@ describe("analyzeCoordinateGeometry", () => {
     expect(geometry?.line.kind).toBe("vertical");
   });
 
+  it("builds a parallel line through a point", () => {
+    const geometry = analyzeCoordinateGeometry(
+      "parallel through P(3, 4) to y = 2x + 1",
+    );
+
+    expect(geometry?.features).toEqual(
+      expect.arrayContaining([
+        { label: "Relationship", value: "parallel" },
+        { label: "Given line", value: "y = 2x + 1" },
+        { label: "Given slope", value: "2" },
+        { label: "New slope", value: "2" },
+        { label: "Point-slope form", value: "y - 4 = 2(x - 3)" },
+        { label: "Slope-intercept form", value: "y = 2x - 2" },
+      ]),
+    );
+    expect(geometry?.referenceLineLabel).toBe("y = 2x + 1");
+  });
+
+  it("builds a perpendicular line through a point", () => {
+    const geometry = analyzeCoordinateGeometry(
+      "perpendicular through P(3, 4) to y = 2x + 1",
+    );
+
+    expect(geometry?.features).toEqual(
+      expect.arrayContaining([
+        { label: "Relationship", value: "perpendicular" },
+        { label: "New slope", value: "-1/2" },
+        { label: "Point-slope form", value: "y - 4 = (-1/2)(x - 3)" },
+        { label: "Slope-intercept form", value: "y = -1/2x + 11/2" },
+      ]),
+    );
+  });
+
+  it("handles a perpendicular line to a vertical line", () => {
+    const geometry = analyzeCoordinateGeometry(
+      "perpendicular through P(1, -2) to x = 3",
+    );
+
+    expect(geometry?.features).toEqual(
+      expect.arrayContaining([
+        { label: "Relationship", value: "perpendicular" },
+        { label: "Given slope", value: "undefined" },
+        { label: "New slope", value: "0" },
+        { label: "New line", value: "y = -2" },
+      ]),
+    );
+  });
+
   it("ignores non-geometry input", () => {
     expect(analyzeCoordinateGeometry("2, 6, 18, 54")).toBeNull();
   });
