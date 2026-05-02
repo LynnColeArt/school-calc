@@ -2,9 +2,14 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { GraphPanel } from "../src/components/graph-panel";
+import { SequencePanel } from "../src/components/sequence-panel";
 import { EXAMPLE_PROBLEMS } from "../src/lib/algebra/examples";
 import { renderTrace } from "../src/lib/algebra/render";
-import { analyzeGraph, solveAlgebra } from "../src/lib/algebra/solver";
+import {
+  analyzeGraph,
+  analyzeSequence,
+  solveAlgebra,
+} from "../src/lib/algebra/solver";
 import type { OutputMode } from "../src/lib/algebra/types";
 
 const modeLabels: Array<{ mode: OutputMode; label: string }> = [
@@ -13,6 +18,18 @@ const modeLabels: Array<{ mode: OutputMode; label: string }> = [
   { mode: "hint", label: "Hint" },
 ];
 
+const graphExamples = EXAMPLE_PROBLEMS.filter((example) =>
+  example.input.startsWith("y = "),
+);
+
+const solveExamples = EXAMPLE_PROBLEMS.filter(
+  (example) => !example.input.startsWith("y = ") && !example.input.includes(","),
+);
+
+const sequenceExamples = EXAMPLE_PROBLEMS.filter((example) =>
+  example.input.includes(","),
+);
+
 export default function Home() {
   const [problem, setProblem] = useState("3x + 5 = 26");
   const [mode, setMode] = useState<OutputMode>("homework");
@@ -20,14 +37,30 @@ export default function Home() {
 
   const trace = useMemo(() => solveAlgebra(submitted), [submitted]);
   const graph = useMemo(() => analyzeGraph(submitted), [submitted]);
+  const sequence = useMemo(() => analyzeSequence(submitted), [submitted]);
   const rendered = useMemo(() => renderTrace(trace, mode), [trace, mode]);
   const showWork = trace.result.kind !== "unsupported";
-  const displayTitle =
-    !showWork && graph ? graph.title : trace.title;
-  const displayTopic =
-    !showWork && graph ? graph.topic : trace.topic;
-  const displayStandards =
-    !showWork && graph ? graph.standardCodes : trace.standardCodes;
+  const displayTitle = !showWork
+    ? graph
+      ? graph.title
+      : sequence
+        ? sequence.title
+        : trace.title
+    : trace.title;
+  const displayTopic = !showWork
+    ? graph
+      ? graph.topic
+      : sequence
+        ? sequence.topic
+        : trace.topic
+    : trace.topic;
+  const displayStandards = !showWork
+    ? graph
+      ? graph.standardCodes
+      : sequence
+        ? sequence.standardCodes
+        : trace.standardCodes
+    : trace.standardCodes;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,9 +85,14 @@ export default function Home() {
               aria-label="Math problem"
               className="problem-input"
               onChange={(event) => setProblem(event.target.value)}
+              placeholder="Solve 3x + 5 = 26, graph y = x^2 - 4x + 3, or enter 2, 6, 18, 54"
               spellCheck={false}
               value={problem}
             />
+            <div className="entry-hint">
+              <strong>More than equations.</strong>
+              <span>Use y = ... for graphs or comma-separated terms for sequences.</span>
+            </div>
             <div className="mode-row" aria-label="Output mode">
               {modeLabels.map((item) => (
                 <button
@@ -68,13 +106,59 @@ export default function Home() {
               ))}
             </div>
             <button className="solve-button" type="submit">
-              Solve
+              Show Result
             </button>
           </form>
 
+          <div className="example-group" aria-label="Graph examples">
+            <h2 className="section-title">Graph a function</h2>
+            <p className="section-note">
+              Lines and parabolas will open the graph panel on the right.
+            </p>
+            <div className="example-list">
+              {graphExamples.map((example) => (
+                <button
+                  className="example-button example-button-graph"
+                  key={example.input}
+                  onClick={() => {
+                    setProblem(example.input);
+                    setSubmitted(example.input);
+                  }}
+                  type="button"
+                >
+                  <code>{example.input}</code>
+                  <span>{example.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="example-group" aria-label="Sequence examples">
+            <h2 className="section-title">Sequence rules</h2>
+            <p className="section-note">
+              Enter comma-separated terms to build recursive and explicit rules.
+            </p>
+            <div className="example-list">
+              {sequenceExamples.map((example) => (
+                <button
+                  className="example-button example-button-sequence"
+                  key={example.input}
+                  onClick={() => {
+                    setProblem(example.input);
+                    setSubmitted(example.input);
+                  }}
+                  type="button"
+                >
+                  <code>{example.input}</code>
+                  <span>{example.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="example-list" aria-label="Examples">
-            <h2 className="section-title">Examples</h2>
-            {EXAMPLE_PROBLEMS.map((example) => (
+            <h2 className="section-title">Solve examples</h2>
+            {solveExamples.map((example) => (
               <button
                 className="example-button"
                 key={example.input}
@@ -92,7 +176,7 @@ export default function Home() {
 
           <p className="notes">
             First slice: equation solving, radicals, and graphing for lines and
-            parabolas written as y = ...
+            parabolas written in function form.
           </p>
         </aside>
 
@@ -109,7 +193,9 @@ export default function Home() {
             <div
               className={`solution-layout ${
                 graph ? "solution-layout-graph" : ""
-              } ${showWork ? "solution-layout-work" : ""}`.trim()}
+              } ${sequence ? "solution-layout-sequence" : ""} ${
+                showWork ? "solution-layout-work" : ""
+              }`.trim()}
             >
               {showWork && (
                 <div className="work-section">
@@ -152,11 +238,12 @@ export default function Home() {
                 </div>
               )}
 
-              {!showWork && !graph && (
+              {!showWork && !graph && !sequence && (
                 <div className="unsupported">{trace.result.explanation}</div>
               )}
 
               {graph && <GraphPanel graph={graph} />}
+              {sequence && <SequencePanel sequence={sequence} />}
             </div>
           </div>
         </section>

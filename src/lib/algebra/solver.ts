@@ -3,6 +3,7 @@ import type {
   GraphFeature,
   GraphPoint,
   MathStatement,
+  SequenceAnalysis,
   SolveStep,
   SolveTrace,
 } from "./types";
@@ -58,6 +59,17 @@ class Rational {
   }
 
   static fromString(value: string) {
+    if (value.includes("/")) {
+      const [numerator, denominator, extra] = value.split("/");
+      if (
+        extra === undefined &&
+        numerator !== undefined &&
+        denominator !== undefined
+      ) {
+        return new Rational(Number(numerator), Number(denominator));
+      }
+    }
+
     if (value.includes(".")) {
       const [whole, decimal] = value.split(".");
       const scale = 10 ** (decimal?.length ?? 0);
@@ -192,6 +204,37 @@ export function analyzeGraph(input: string): GraphAnalysis | null {
   } catch {
     return null;
   }
+}
+
+export function analyzeSequence(input: string): SequenceAnalysis | null {
+  const terms = parseSequenceTerms(input);
+  if (terms === null || terms.length < 3) {
+    return null;
+  }
+
+  const arithmeticDifference = terms[1]?.subtract(terms[0] as Rational);
+  const isArithmetic =
+    arithmeticDifference !== undefined &&
+    terms.slice(1).every((term, index) =>
+      term.subtract(terms[index] as Rational).equals(arithmeticDifference),
+    );
+
+  const geometricRatio = inferGeometricRatio(terms);
+  const isGeometric =
+    geometricRatio !== null &&
+    terms.slice(1).every((term, index) =>
+      term.equals((terms[index] as Rational).multiply(geometricRatio)),
+    );
+
+  if (isGeometric && geometricRatio) {
+    return buildGeometricSequenceAnalysis(terms, geometricRatio);
+  }
+
+  if (isArithmetic && arithmeticDifference) {
+    return buildArithmeticSequenceAnalysis(terms, arithmeticDifference);
+  }
+
+  return null;
 }
 
 function trySolveLinearEquation(input: string): SolveTrace | null {
@@ -517,6 +560,100 @@ function buildQuadraticGraphAnalysis(expression: Polynomial): GraphAnalysis {
       c: rationalToNumber(expression.constant),
     },
     window,
+  };
+}
+
+function buildArithmeticSequenceAnalysis(
+  terms: Rational[],
+  difference: Rational,
+): SequenceAnalysis {
+  const firstTerm = terms[0] as Rational;
+  const recursiveRule = formatArithmeticRecursiveRule(firstTerm, difference);
+  const explicitRule = formatArithmeticExplicitRule(firstTerm, difference);
+  const steps = [
+    {
+      math: formatSequenceTerms(terms),
+      note: "Start with the given terms.",
+    },
+    {
+      math: formatArithmeticDifferences(terms),
+      note: "Compare consecutive terms by subtraction.",
+    },
+    {
+      math: `common difference = ${difference.format()}`,
+      note: "The difference stays constant, so the sequence is arithmetic.",
+    },
+    {
+      math: recursiveRule,
+      note: "Write the recursive rule using the common difference.",
+    },
+    {
+      math: explicitRule,
+      note: "Write the explicit rule from the first term and common difference.",
+    },
+  ];
+
+  return {
+    kind: "arithmetic",
+    title: "Arithmetic sequence",
+    topic: "Sequences",
+    summary: "Recursive rule, explicit rule, and next terms",
+    standardCodes: ["A1.LQE.A", "A1.LQE.B"],
+    features: [
+      { label: "Type", value: "arithmetic" },
+      { label: "Common difference", value: difference.format() },
+      { label: "Recursive rule", value: recursiveRule },
+      { label: "Explicit rule", value: explicitRule },
+    ],
+    steps,
+    table: buildSequenceTable(terms, (current) => current.add(difference)),
+  };
+}
+
+function buildGeometricSequenceAnalysis(
+  terms: Rational[],
+  ratio: Rational,
+): SequenceAnalysis {
+  const firstTerm = terms[0] as Rational;
+  const recursiveRule = formatGeometricRecursiveRule(firstTerm, ratio);
+  const explicitRule = formatGeometricExplicitRule(firstTerm, ratio);
+  const steps = [
+    {
+      math: formatSequenceTerms(terms),
+      note: "Start with the given terms.",
+    },
+    {
+      math: formatGeometricRatios(terms),
+      note: "Compare consecutive terms by division.",
+    },
+    {
+      math: `common ratio = ${ratio.format()}`,
+      note: "The ratio stays constant, so the sequence is geometric.",
+    },
+    {
+      math: recursiveRule,
+      note: "Write the recursive rule using the common ratio.",
+    },
+    {
+      math: explicitRule,
+      note: "Write the explicit rule from the first term and common ratio.",
+    },
+  ];
+
+  return {
+    kind: "geometric",
+    title: "Geometric sequence",
+    topic: "Sequences",
+    summary: "Recursive rule, explicit rule, and next terms",
+    standardCodes: ["A1.LQE.A", "A1.LQE.B"],
+    features: [
+      { label: "Type", value: "geometric" },
+      { label: "Common ratio", value: ratio.format() },
+      { label: "Recursive rule", value: recursiveRule },
+      { label: "Explicit rule", value: explicitRule },
+    ],
+    steps,
+    table: buildSequenceTable(terms, (current) => current.multiply(ratio)),
   };
 }
 
@@ -1616,6 +1753,152 @@ function buildGraphWindow(
     yMin: Math.floor(yMin - yPadding),
     yMax: Math.ceil(yMax + yPadding),
   };
+}
+
+function parseSequenceTerms(input: string) {
+  if (input.includes("=") || input.includes("sqrt") || input.includes("√")) {
+    return null;
+  }
+
+  const parts = input
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length < 3) {
+    return null;
+  }
+
+  try {
+    return parts.map((part) => Rational.fromString(part));
+  } catch {
+    return null;
+  }
+}
+
+function inferGeometricRatio(terms: Rational[]) {
+  const first = terms[0];
+  const second = terms[1];
+  if (!first || !second) {
+    return null;
+  }
+
+  if (first.isZero()) {
+    return terms.every((term) => term.isZero()) ? Rational.zero() : null;
+  }
+
+  return second.divide(first);
+}
+
+function buildSequenceTable(
+  givenTerms: Rational[],
+  nextTerm: (current: Rational) => Rational,
+) {
+  const rows = givenTerms.map((term, index) => ({
+    n: String(index + 1),
+    value: term.format(),
+    projected: false,
+  }));
+
+  let current = givenTerms[givenTerms.length - 1] as Rational;
+  for (let index = 0; index < 3; index += 1) {
+    current = nextTerm(current);
+    rows.push({
+      n: String(givenTerms.length + index + 1),
+      value: current.format(),
+      projected: true,
+    });
+  }
+
+  return rows;
+}
+
+function formatSequenceTerms(terms: Rational[]) {
+  return terms.map((term) => term.format()).join(", ");
+}
+
+function formatArithmeticDifferences(terms: Rational[]) {
+  const parts: string[] = [];
+  for (let index = 1; index < terms.length; index += 1) {
+    const current = terms[index] as Rational;
+    const previous = terms[index - 1] as Rational;
+    parts.push(
+      `${current.format()} - ${previous.format()} = ${current
+        .subtract(previous)
+        .format()}`,
+    );
+  }
+  return parts.join(", ");
+}
+
+function formatGeometricRatios(terms: Rational[]) {
+  const parts: string[] = [];
+  for (let index = 1; index < terms.length; index += 1) {
+    const current = terms[index] as Rational;
+    const previous = terms[index - 1] as Rational;
+    if (previous.isZero()) {
+      parts.push(`${current.format()}/${previous.format()} is undefined`);
+    } else {
+      parts.push(
+        `${current.format()}/${previous.format()} = ${current
+          .divide(previous)
+          .format()}`,
+      );
+    }
+  }
+  return parts.join(", ");
+}
+
+function formatArithmeticRecursiveRule(firstTerm: Rational, difference: Rational) {
+  if (difference.isZero()) {
+    return `a_n = a_(n - 1), a_1 = ${firstTerm.format()}`;
+  }
+
+  if (difference.isNegative()) {
+    return `a_n = a_(n - 1) - ${difference.abs().format()}, a_1 = ${firstTerm.format()}`;
+  }
+
+  return `a_n = a_(n - 1) + ${difference.format()}, a_1 = ${firstTerm.format()}`;
+}
+
+function formatArithmeticExplicitRule(firstTerm: Rational, difference: Rational) {
+  if (difference.isZero()) {
+    return `a_n = ${firstTerm.format()}`;
+  }
+
+  if (difference.isNegative()) {
+    return `a_n = ${firstTerm.format()} - ${difference.abs().format()}(n - 1)`;
+  }
+
+  return `a_n = ${firstTerm.format()} + ${difference.format()}(n - 1)`;
+}
+
+function formatGeometricRecursiveRule(firstTerm: Rational, ratio: Rational) {
+  const multiplier = formatRecursiveMultiplier(ratio);
+  return `a_n = ${multiplier}a_(n - 1), a_1 = ${firstTerm.format()}`;
+}
+
+function formatGeometricExplicitRule(firstTerm: Rational, ratio: Rational) {
+  if (ratio.isOne()) {
+    return `a_n = ${firstTerm.format()}`;
+  }
+
+  return `a_n = ${firstTerm.format()}(${ratio.format()})^(n - 1)`;
+}
+
+function formatRecursiveMultiplier(value: Rational) {
+  if (value.isOne()) {
+    return "";
+  }
+
+  if (value.isNegativeOne()) {
+    return "-";
+  }
+
+  if (value.denominator !== 1 || value.isNegative()) {
+    return `(${value.format()})`;
+  }
+
+  return value.format();
 }
 
 function formatCandidate(value: Rational) {

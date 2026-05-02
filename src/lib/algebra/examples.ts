@@ -71,4 +71,12 @@ export const EXAMPLE_PROBLEMS = [
     input: "y = x^2 - 4x + 3",
     label: "graph parabola",
   },
+  {
+    input: "2, 6, 18, 54",
+    label: "geometric sequence",
+  },
+  {
+    input: "4, 10, 16, 22",
+    label: "arithmetic sequence",
+  },
 ] as const;

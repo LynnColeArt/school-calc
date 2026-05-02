@@ -82,3 +82,22 @@ export type GraphAnalysis = {
   };
   window: GraphWindow;
 };
+
+export type SequenceKind = "arithmetic" | "geometric";
+
+export type SequenceTableRow = {
+  n: string;
+  value: string;
+  projected: boolean;
+};
+
+export type SequenceAnalysis = {
+  kind: SequenceKind;
+  title: string;
+  topic: string;
+  summary: string;
+  standardCodes: string[];
+  features: GraphFeature[];
+  steps: RenderedLine[];
+  table: SequenceTableRow[];
+};
