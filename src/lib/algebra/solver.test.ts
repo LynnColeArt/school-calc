@@ -71,6 +71,18 @@ describe("solveAlgebra", () => {
     expect(trace.steps.at(-1)?.after.text).toBe("sqrt(45 + 4) = 7");
   });
 
+  it("rejects an extraneous root after squaring both sides", () => {
+    const trace = solveAlgebra("sqrt(x + 12) = x");
+
+    expect(trace.result.value).toBe("x = 4");
+    expect(trace.steps.map((step) => step.after.text)).toContain(
+      "x = -3 or x = 4",
+    );
+    expect(
+      trace.steps.some((step) => step.after.text.includes("reject it")),
+    ).toBe(true);
+  });
+
   it("simplifies a radical by factoring out a perfect square", () => {
     const trace = solveAlgebra("sqrt(18)");
 
@@ -90,6 +102,26 @@ describe("solveAlgebra", () => {
       "2sqrt(4 * 2)",
       "2 * sqrt(4) * sqrt(2)",
       "4sqrt(2)",
+    ]);
+  });
+
+  it("combines like radicals after simplification", () => {
+    const trace = solveAlgebra("sqrt(50) + sqrt(8)");
+
+    expect(trace.result.value).toBe("7sqrt(2)");
+    expect(trace.steps.map((step) => step.after.text)).toEqual([
+      "5sqrt(2) + 2sqrt(2)",
+      "7sqrt(2)",
+    ]);
+  });
+
+  it("combines simplified radicals with subtraction", () => {
+    const trace = solveAlgebra("3sqrt(12) - sqrt(27)");
+
+    expect(trace.result.value).toBe("3sqrt(3)");
+    expect(trace.steps.map((step) => step.after.text)).toEqual([
+      "6sqrt(3) - 3sqrt(3)",
+      "3sqrt(3)",
     ]);
   });
 

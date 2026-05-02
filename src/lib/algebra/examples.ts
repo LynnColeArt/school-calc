@@ -32,11 +32,23 @@ export const EXAMPLE_PROBLEMS = [
     label: "radical equation",
   },
   {
+    input: "sqrt(x + 12) = x",
+    label: "extraneous root check",
+  },
+  {
     input: "sqrt(18)",
     label: "simplify radical",
   },
   {
     input: "2sqrt(8)",
     label: "coefficient radical",
+  },
+  {
+    input: "sqrt(50) + sqrt(8)",
+    label: "combine like radicals",
+  },
+  {
+    input: "3sqrt(12) - sqrt(27)",
+    label: "radical subtraction",
   },
 ] as const;
