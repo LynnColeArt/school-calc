@@ -91,6 +91,13 @@ export type SequenceTableRow = {
   projected: boolean;
 };
 
+export type SequencePoint = {
+  n: number;
+  value: number;
+  projected: boolean;
+  label: string;
+};
+
 export type SequenceAnalysis = {
   kind: SequenceKind;
   title: string;
@@ -100,6 +107,8 @@ export type SequenceAnalysis = {
   features: GraphFeature[];
   steps: RenderedLine[];
   table: SequenceTableRow[];
+  points: SequencePoint[];
+  window: GraphWindow;
 };
 
 export type GeometryPoint = {

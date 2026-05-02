@@ -18,6 +18,13 @@ describe("analyzeSequence", () => {
       { n: "6", value: "486", projected: true },
       { n: "7", value: "1458", projected: true },
     ]);
+    expect(sequence?.points).toHaveLength(7);
+    expect(sequence?.points[0]).toMatchObject({ n: 1, value: 2, projected: false });
+    expect(sequence?.points.at(-1)).toMatchObject({
+      n: 7,
+      value: 1458,
+      projected: true,
+    });
   });
 
   it("extracts recursive and explicit rules for an arithmetic sequence", () => {
@@ -70,6 +77,11 @@ describe("analyzeSequence", () => {
       { n: "3", value: "18", projected: true },
       { n: "4", value: "54", projected: true },
     ]);
+    expect(sequence?.points[1]).toMatchObject({
+      n: 2,
+      value: 6,
+      projected: true,
+    });
   });
 
   it("reads a recursive arithmetic rule directly", () => {

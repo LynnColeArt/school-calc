@@ -602,6 +602,12 @@ button {
   gap: 1rem;
 }
 
+.sequence-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr);
+  gap: 1rem;
+}
+
 .sequence-steps {
   display: grid;
   gap: 0.9rem;
@@ -650,6 +656,32 @@ button {
 
 .sequence-row-projected td {
   color: var(--accent-strong);
+}
+
+.sequence-path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sequence-stem {
+  stroke: rgba(39, 108, 114, 0.22);
+  stroke-width: 1.5;
+}
+
+.sequence-point {
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.sequence-point-given {
+  fill: var(--accent-strong);
+}
+
+.sequence-point-projected {
+  fill: var(--gold);
 }
 
 .geometry-section {
@@ -736,6 +768,7 @@ button {
   .solution-layout-work.solution-layout-graph,
   .graph-layout,
   .sequence-layout,
+  .sequence-top,
   .geometry-top {
     grid-template-columns: 1fr;
   }

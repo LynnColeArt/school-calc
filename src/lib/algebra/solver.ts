@@ -745,6 +745,12 @@ function buildArithmeticSequenceAnalysis(
   const firstTerm = terms[0] as Rational;
   const recursiveRule = formatArithmeticRecursiveRule(firstTerm, difference);
   const explicitRule = formatArithmeticExplicitRule(firstTerm, difference);
+  const projectedTerms = buildProjectedSequenceTerms(
+    terms,
+    (current) => current.add(difference),
+    3,
+  );
+  const points = buildSequencePoints(projectedTerms, terms.length);
   const steps = [
     {
       math: formatSequenceTerms(terms),
@@ -772,7 +778,7 @@ function buildArithmeticSequenceAnalysis(
     kind: "arithmetic",
     title: "Arithmetic sequence",
     topic: "Sequences",
-    summary: "Recursive rule, explicit rule, and next terms",
+    summary: "Recursive rule, explicit rule, next terms, and a term graph",
     standardCodes: ["A1.LQE.A", "A1.LQE.B"],
     features: [
       { label: "Type", value: "arithmetic" },
@@ -781,7 +787,9 @@ function buildArithmeticSequenceAnalysis(
       { label: "Explicit rule", value: explicitRule },
     ],
     steps,
-    table: buildSequenceTable(terms, (current) => current.add(difference)),
+    table: buildSequenceTableFromTerms(projectedTerms, terms.length),
+    points,
+    window: buildSequenceWindow(points),
   };
 }
 
@@ -792,6 +800,12 @@ function buildGeometricSequenceAnalysis(
   const firstTerm = terms[0] as Rational;
   const recursiveRule = formatGeometricRecursiveRule(firstTerm, ratio);
   const explicitRule = formatGeometricExplicitRule(firstTerm, ratio);
+  const projectedTerms = buildProjectedSequenceTerms(
+    terms,
+    (current) => current.multiply(ratio),
+    3,
+  );
+  const points = buildSequencePoints(projectedTerms, terms.length);
   const steps = [
     {
       math: formatSequenceTerms(terms),
@@ -819,7 +833,7 @@ function buildGeometricSequenceAnalysis(
     kind: "geometric",
     title: "Geometric sequence",
     topic: "Sequences",
-    summary: "Recursive rule, explicit rule, and next terms",
+    summary: "Recursive rule, explicit rule, next terms, and a term graph",
     standardCodes: ["A1.LQE.A", "A1.LQE.B"],
     features: [
       { label: "Type", value: "geometric" },
@@ -828,7 +842,9 @@ function buildGeometricSequenceAnalysis(
       { label: "Explicit rule", value: explicitRule },
     ],
     steps,
-    table: buildSequenceTable(terms, (current) => current.multiply(ratio)),
+    table: buildSequenceTableFromTerms(projectedTerms, terms.length),
+    points,
+    window: buildSequenceWindow(points),
   };
 }
 
@@ -848,6 +864,7 @@ function buildRecursiveSequenceAnalysis(recursive: {
     recursive.constant,
     recursive.firstTerm,
   );
+  const points = buildSequencePoints(terms, 1);
   const steps = [
     {
       math: recursiveRule,
@@ -895,6 +912,8 @@ function buildRecursiveSequenceAnalysis(recursive: {
         },
       ],
       table: buildSequenceTableFromTerms(terms, 1),
+      points,
+      window: buildSequenceWindow(points),
     };
   }
 
@@ -928,6 +947,8 @@ function buildRecursiveSequenceAnalysis(recursive: {
         },
       ],
       table: buildSequenceTableFromTerms(terms, 1),
+      points,
+      window: buildSequenceWindow(points),
     };
   }
 
@@ -935,7 +956,7 @@ function buildRecursiveSequenceAnalysis(recursive: {
     kind: "recursive",
     title: "Recursive sequence",
     topic: "Sequences",
-    summary: "Recursive rule and generated terms",
+    summary: "Recursive rule, generated terms, and a term graph",
     standardCodes: ["A1.LQE.A", "A1.LQE.B"],
     features: [
       { label: "Type", value: "recursive" },
@@ -945,6 +966,8 @@ function buildRecursiveSequenceAnalysis(recursive: {
     ],
     steps,
     table: buildSequenceTableFromTerms(terms, 1),
+    points,
+    window: buildSequenceWindow(points),
   };
 }
 
@@ -2111,27 +2134,20 @@ function inferGeometricRatio(terms: Rational[]) {
   return second.divide(first);
 }
 
-function buildSequenceTable(
+function buildProjectedSequenceTerms(
   givenTerms: Rational[],
   nextTerm: (current: Rational) => Rational,
+  extraCount: number,
 ) {
-  const rows = givenTerms.map((term, index) => ({
-    n: String(index + 1),
-    value: term.format(),
-    projected: false,
-  }));
-
+  const terms = [...givenTerms];
   let current = givenTerms[givenTerms.length - 1] as Rational;
-  for (let index = 0; index < 3; index += 1) {
+
+  for (let index = 0; index < extraCount; index += 1) {
     current = nextTerm(current);
-    rows.push({
-      n: String(givenTerms.length + index + 1),
-      value: current.format(),
-      projected: true,
-    });
+    terms.push(current);
   }
 
-  return rows;
+  return terms;
 }
 
 function buildSequenceTableFromTerms(terms: Rational[], givenCount: number) {
@@ -2140,6 +2156,33 @@ function buildSequenceTableFromTerms(terms: Rational[], givenCount: number) {
     value: term.format(),
     projected: index >= givenCount,
   }));
+}
+
+function buildSequencePoints(terms: Rational[], givenCount: number) {
+  return terms.map((term, index) => ({
+    n: index + 1,
+    value: rationalToNumber(term),
+    projected: index >= givenCount,
+    label: `(${index + 1}, ${term.format()})`,
+  }));
+}
+
+function buildSequenceWindow(points: Array<{ n: number; value: number }>) {
+  const xValues = points.map((point) => point.n);
+  const yValues = points.map((point) => point.value);
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues);
+  const xPadding = Math.max(1, (xMax - xMin) * 0.15 || 1);
+  const yPadding = Math.max(2, (yMax - yMin) * 0.2 || 2);
+
+  return {
+    xMin: Math.floor(xMin - xPadding),
+    xMax: Math.ceil(xMax + xPadding),
+    yMin: Math.floor(yMin - yPadding),
+    yMax: Math.ceil(yMax + yPadding),
+  };
 }
 
 function buildRecursiveSequenceTerms(
