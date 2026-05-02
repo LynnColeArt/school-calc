@@ -56,10 +56,18 @@ describe("solveAlgebra", () => {
     expect(trace.result.value).toBe("x = 0");
   });
 
-  it("uses the quadratic formula for a non-factorable quadratic", () => {
-    const trace = solveAlgebra("x^2 - 7x + 8 = 0");
+  it("solves a monic non-factorable quadratic by completing the square", () => {
+    const trace = solveAlgebra("x^2 + 6x + 2 = 0");
 
-    expect(trace.result.value).toBe("x = (7 + sqrt(17))/2 or x = (7 - sqrt(17))/2");
+    expect(trace.result.value).toBe("x = -3 + sqrt(7) or x = -3 - sqrt(7)");
+    expect(trace.topic).toBe("Completing the square");
+    expect(trace.steps.map((step) => step.after.text)).toContain("(x + 3)^2 = 7");
+  });
+
+  it("uses the quadratic formula for a non-monic non-factorable quadratic", () => {
+    const trace = solveAlgebra("2x^2 - 3x - 1 = 0");
+
+    expect(trace.result.value).toBe("x = (3 + sqrt(17))/4 or x = (3 - sqrt(17))/4");
     expect(trace.steps.some((step) => step.operation === "Use the quadratic formula")).toBe(true);
   });
 
@@ -90,11 +98,11 @@ describe("solveAlgebra", () => {
     ).toBe(true);
   });
 
-  it("uses the quadratic formula inside a square-root equation and keeps only the valid root", () => {
+  it("checks candidates after completing the square inside a square-root equation", () => {
     const trace = solveAlgebra("sqrt(x + 1) = x - 3");
 
     expect(trace.result.value).toBe("x = (7 + sqrt(17))/2");
-    expect(trace.steps.some((step) => step.operation === "Use the quadratic formula")).toBe(true);
+    expect(trace.steps.map((step) => step.after.text)).toContain("(x - 7/2)^2 = 17/4");
     expect(
       trace.steps.some((step) => step.after.text.includes("reject it")),
     ).toBe(true);

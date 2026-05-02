@@ -24,7 +24,11 @@ export const EXAMPLE_PROBLEMS = [
     label: "zero-product shape",
   },
   {
-    input: "x^2 - 7x + 8 = 0",
+    input: "x^2 + 6x + 2 = 0",
+    label: "complete the square",
+  },
+  {
+    input: "2x^2 - 3x - 1 = 0",
     label: "quadratic formula",
   },
   {
@@ -37,7 +41,7 @@ export const EXAMPLE_PROBLEMS = [
   },
   {
     input: "sqrt(x + 1) = x - 3",
-    label: "formula with root check",
+    label: "complete square with root check",
   },
   {
     input: "sqrt(x + 12) = x",

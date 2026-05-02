@@ -1410,7 +1410,170 @@ function buildQuadraticResolution(
     };
   }
 
+  if (isCompletingSquareCandidate(polynomial, integer)) {
+    return buildCompletingSquareResolution(previous, polynomial, integer);
+  }
+
   return buildQuadraticFormulaResolution(previous, integer);
+}
+
+function isCompletingSquareCandidate(
+  polynomial: Polynomial,
+  integer: { a: number; b: number; c: number },
+) {
+  return (
+    integer.a === 1 &&
+    polynomial.squareCoefficient.isOne() &&
+    polynomial.coefficient.denominator === 1 &&
+    polynomial.constant.denominator === 1
+  );
+}
+
+function buildCompletingSquareResolution(
+  previous: MathStatement,
+  polynomial: Polynomial,
+  integer: { a: number; b: number; c: number },
+): {
+  steps: SolveStep[];
+  candidates: RootCandidate[];
+  result: string;
+  method: string;
+  standardCodes: string[];
+} {
+  const halfCoefficient = polynomial.coefficient.divide(new Rational(2));
+  const completingTerm = halfCoefficient.multiply(halfCoefficient);
+  const isolatedRight = polynomial.constant.negate();
+  const completedRight = isolatedRight.add(completingTerm);
+  const xExpression: Linear = {
+    coefficient: Rational.one(),
+    constant: halfCoefficient,
+  };
+  const isolatedLeft: Polynomial = {
+    squareCoefficient: Rational.one(),
+    coefficient: polynomial.coefficient,
+    constant: Rational.zero(),
+  };
+  const completedLeft: Polynomial = {
+    squareCoefficient: Rational.one(),
+    coefficient: polynomial.coefficient,
+    constant: completingTerm,
+  };
+  const isolatedEquation = statement(
+    `${formatPolynomial(isolatedLeft)} = ${isolatedRight.format()}`,
+  );
+  const completedEquation = statement(
+    `${formatPolynomial(completedLeft)} = ${completedRight.format()}`,
+  );
+  const squaredEquation = statement(
+    `(${formatLinear(xExpression)})^2 = ${completedRight.format()}`,
+  );
+  const steps: SolveStep[] = [
+    {
+      before: previous,
+      after: isolatedEquation,
+      operation: bothSidesOperation(polynomial.constant.negate()),
+      reason:
+        "Isolating the x terms makes it possible to build a perfect-square trinomial.",
+      rule: "quadratic.isolateConstant",
+      standardCodes: ["A1.REI.A.1"],
+    },
+    {
+      before: isolatedEquation,
+      after: completedEquation,
+      operation: bothSidesOperation(completingTerm),
+      reason:
+        "Adding the square of half the x coefficient creates a perfect-square trinomial.",
+      rule: "quadratic.completeSquareAdd",
+      standardCodes: ["A1.REI.A.1", "A1.SSE.A.2"],
+    },
+    {
+      before: completedEquation,
+      after: squaredEquation,
+      operation: "Rewrite as a perfect square",
+      reason:
+        "x^2 + bx + (b/2)^2 rewrites as a squared binomial with the same value.",
+      rule: "quadratic.completeSquareRewrite",
+      standardCodes: ["A1.SSE.A.2"],
+    },
+  ];
+
+  if (completedRight.isNegative()) {
+    steps.push({
+      before: squaredEquation,
+      after: statement("no real solution"),
+      operation: "Compare to squares of real numbers",
+      reason:
+        "A real number squared cannot equal a negative number, so there is no real solution.",
+      rule: "quadratic.completeSquareNoRealSolution",
+      standardCodes: ["A1.REI.A.2"],
+    });
+
+    return {
+      steps,
+      candidates: [],
+      result: "no real solution",
+      method: "Completing the square",
+      standardCodes: ["A1.REI.A.1", "A1.SSE.A.2", "A1.REI.A.2"],
+    };
+  }
+
+  const discriminant = integer.b * integer.b - 4 * integer.a * integer.c;
+  const squareRootEquation = statement(
+    `${formatLinear(xExpression)} = ${formatPlusMinusSquareRoot(completedRight)}`,
+  );
+  const solutionDisplay = formatQuadraticFormulaValue(
+    integer.a,
+    integer.b,
+    discriminant,
+  );
+  const isolatedSolution = statement(`x = ${solutionDisplay}`);
+  const candidates = buildQuadraticFormulaCandidates(
+    integer.a,
+    integer.b,
+    discriminant,
+  );
+  const result = formatRootCandidates(candidates);
+
+  steps.push(
+    {
+      before: squaredEquation,
+      after: squareRootEquation,
+      operation: "Take the square root of both sides",
+      reason:
+        "Once the left side is a square, the square root property gives the possible real values.",
+      rule: "quadratic.completeSquareRoot",
+      standardCodes: ["A1.REI.A.2", "A1.NQ.A.2"],
+    },
+    {
+      before: squareRootEquation,
+      after: isolatedSolution,
+      operation: bothSidesOperation(halfCoefficient.negate()),
+      reason:
+        "Adding or subtracting the same number on both sides isolates x.",
+      rule: "quadratic.completeSquareIsolate",
+      standardCodes: ["A1.REI.A.1"],
+    },
+  );
+
+  if (isolatedSolution.text !== result) {
+    steps.push({
+      before: isolatedSolution,
+      after: statement(result),
+      operation: "Write each solution",
+      reason:
+        "The plus-minus symbol represents two solution values when the radicand is positive.",
+      rule: "quadratic.completeSquareSplit",
+      standardCodes: ["A1.REI.A.2"],
+    });
+  }
+
+  return {
+    steps,
+    candidates,
+    result,
+    method: "Completing the square",
+    standardCodes: ["A1.REI.A.1", "A1.SSE.A.2", "A1.REI.A.2", "A1.NQ.A.2"],
+  };
 }
 
 function buildQuadraticFormulaResolution(
@@ -1604,6 +1767,20 @@ function simplifySquareRoot(value: number) {
   }
 
   return `${rootFactor}sqrt(${remaining})`;
+}
+
+function formatPlusMinusSquareRoot(value: Rational) {
+  if (value.isZero()) {
+    return "0";
+  }
+
+  const simplified = simplifyRadicalFraction(
+    0,
+    value.numerator * value.denominator,
+    value.denominator,
+  );
+
+  return formatPlusMinusRoot(simplified);
 }
 
 function extractSquareRootContent(value: string) {
