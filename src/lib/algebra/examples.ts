@@ -72,6 +72,14 @@ export const EXAMPLE_PROBLEMS = [
     label: "graph parabola",
   },
   {
+    input: "points A(1, 2) B(5, 10)",
+    label: "slope and line equation",
+  },
+  {
+    input: "points A(3, -1) B(3, 5)",
+    label: "vertical line",
+  },
+  {
     input: "2, 6, 18, 54",
     label: "geometric sequence",
   },

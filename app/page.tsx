@@ -1,11 +1,13 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { GeometryPanel } from "../src/components/geometry-panel";
 import { GraphPanel } from "../src/components/graph-panel";
 import { SequencePanel } from "../src/components/sequence-panel";
 import { EXAMPLE_PROBLEMS } from "../src/lib/algebra/examples";
 import { renderTrace } from "../src/lib/algebra/render";
 import {
+  analyzeCoordinateGeometry,
   analyzeGraph,
   analyzeSequence,
   solveAlgebra,
@@ -22,12 +24,20 @@ const graphExamples = EXAMPLE_PROBLEMS.filter((example) =>
   example.input.startsWith("y = "),
 );
 
-const solveExamples = EXAMPLE_PROBLEMS.filter(
-  (example) => !example.input.startsWith("y = ") && !example.input.includes(","),
+const geometryExamples = EXAMPLE_PROBLEMS.filter((example) =>
+  example.input.startsWith("points "),
 );
 
-const sequenceExamples = EXAMPLE_PROBLEMS.filter((example) =>
-  example.input.includes(","),
+const solveExamples = EXAMPLE_PROBLEMS.filter(
+  (example) =>
+    !example.input.startsWith("y = ") &&
+    !example.input.startsWith("points ") &&
+    !example.input.includes(","),
+);
+
+const sequenceExamples = EXAMPLE_PROBLEMS.filter(
+  (example) =>
+    example.input.includes(",") && !example.input.startsWith("points "),
 );
 
 export default function Home() {
@@ -36,30 +46,40 @@ export default function Home() {
   const [submitted, setSubmitted] = useState(problem);
 
   const trace = useMemo(() => solveAlgebra(submitted), [submitted]);
+  const geometry = useMemo(
+    () => analyzeCoordinateGeometry(submitted),
+    [submitted],
+  );
   const graph = useMemo(() => analyzeGraph(submitted), [submitted]);
   const sequence = useMemo(() => analyzeSequence(submitted), [submitted]);
   const rendered = useMemo(() => renderTrace(trace, mode), [trace, mode]);
   const showWork = trace.result.kind !== "unsupported";
   const displayTitle = !showWork
-    ? graph
-      ? graph.title
-      : sequence
-        ? sequence.title
-        : trace.title
+    ? geometry
+      ? geometry.title
+      : graph
+        ? graph.title
+        : sequence
+          ? sequence.title
+          : trace.title
     : trace.title;
   const displayTopic = !showWork
-    ? graph
-      ? graph.topic
-      : sequence
-        ? sequence.topic
-        : trace.topic
+    ? geometry
+      ? geometry.topic
+      : graph
+        ? graph.topic
+        : sequence
+          ? sequence.topic
+          : trace.topic
     : trace.topic;
   const displayStandards = !showWork
-    ? graph
-      ? graph.standardCodes
-      : sequence
-        ? sequence.standardCodes
-        : trace.standardCodes
+    ? geometry
+      ? geometry.standardCodes
+      : graph
+        ? graph.standardCodes
+        : sequence
+          ? sequence.standardCodes
+          : trace.standardCodes
     : trace.standardCodes;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -85,13 +105,13 @@ export default function Home() {
               aria-label="Math problem"
               className="problem-input"
               onChange={(event) => setProblem(event.target.value)}
-              placeholder="Solve 3x + 5 = 26, graph y = x^2 - 4x + 3, or enter 2, 6, 18, 54"
+              placeholder="Solve 3x + 5 = 26, graph y = x^2 - 4x + 3, use points A(1, 2) B(5, 10), or enter 2, 6, 18, 54"
               spellCheck={false}
               value={problem}
             />
             <div className="entry-hint">
               <strong>More than equations.</strong>
-              <span>Use y = ... for graphs or comma-separated terms for sequences.</span>
+              <span>Use y = ... for graphs, points A(...) B(...) for coordinate geometry, or comma-separated terms for sequences.</span>
             </div>
             <div className="mode-row" aria-label="Output mode">
               {modeLabels.map((item) => (
@@ -119,6 +139,29 @@ export default function Home() {
               {graphExamples.map((example) => (
                 <button
                   className="example-button example-button-graph"
+                  key={example.input}
+                  onClick={() => {
+                    setProblem(example.input);
+                    setSubmitted(example.input);
+                  }}
+                  type="button"
+                >
+                  <code>{example.input}</code>
+                  <span>{example.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="example-group" aria-label="Geometry examples">
+            <h2 className="section-title">Coordinate geometry</h2>
+            <p className="section-note">
+              Use two points to get slope, midpoint, distance, and the line equation.
+            </p>
+            <div className="example-list">
+              {geometryExamples.map((example) => (
+                <button
+                  className="example-button example-button-geometry"
                   key={example.input}
                   onClick={() => {
                     setProblem(example.input);
@@ -175,8 +218,8 @@ export default function Home() {
           </div>
 
           <p className="notes">
-            First slice: equation solving, radicals, and graphing for lines and
-            parabolas written in function form.
+            First slice: equation solving, radicals, graphing, coordinate
+            geometry, and sequence rules.
           </p>
         </aside>
 
@@ -194,6 +237,8 @@ export default function Home() {
               className={`solution-layout ${
                 graph ? "solution-layout-graph" : ""
               } ${sequence ? "solution-layout-sequence" : ""} ${
+                geometry ? "solution-layout-geometry" : ""
+              } ${
                 showWork ? "solution-layout-work" : ""
               }`.trim()}
             >
@@ -238,10 +283,11 @@ export default function Home() {
                 </div>
               )}
 
-              {!showWork && !graph && !sequence && (
+              {!showWork && !graph && !sequence && !geometry && (
                 <div className="unsupported">{trace.result.explanation}</div>
               )}
 
+              {geometry && <GeometryPanel geometry={geometry} />}
               {graph && <GraphPanel graph={graph} />}
               {sequence && <SequencePanel sequence={sequence} />}
             </div>

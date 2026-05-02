@@ -2,6 +2,8 @@ import type {
   GraphAnalysis,
   GraphFeature,
   GraphPoint,
+  GeometryAnalysis,
+  GeometryPoint,
   MathStatement,
   SequenceAnalysis,
   SolveStep,
@@ -235,6 +237,176 @@ export function analyzeSequence(input: string): SequenceAnalysis | null {
   }
 
   return null;
+}
+
+export function analyzeCoordinateGeometry(input: string): GeometryAnalysis | null {
+  const parsed = parseGeometryPoints(input);
+  if (parsed === null) {
+    return null;
+  }
+
+  const [pointA, pointB] = parsed;
+  if (!pointA || !pointB) {
+    return null;
+  }
+
+  const deltaX = pointB.x.subtract(pointA.x);
+  const deltaY = pointB.y.subtract(pointA.y);
+  const midpointX = pointA.x.add(pointB.x).divide(new Rational(2));
+  const midpointY = pointA.y.add(pointB.y).divide(new Rational(2));
+  const squaredDistance = deltaX.multiply(deltaX).add(deltaY.multiply(deltaY));
+  const distance = formatPositiveSquareRoot(squaredDistance);
+  const points: GeometryPoint[] = [
+    {
+      x: rationalToNumber(pointA.x),
+      y: rationalToNumber(pointA.y),
+      label: `${pointA.label}${formatCoordinate(pointA.x.format(), pointA.y.format())}`,
+      role: "point",
+    },
+    {
+      x: rationalToNumber(pointB.x),
+      y: rationalToNumber(pointB.y),
+      label: `${pointB.label}${formatCoordinate(pointB.x.format(), pointB.y.format())}`,
+      role: "point",
+    },
+    {
+      x: rationalToNumber(midpointX),
+      y: rationalToNumber(midpointY),
+      label: `M${formatCoordinate(midpointX.format(), midpointY.format())}`,
+      role: "midpoint",
+    },
+  ];
+  const steps = [
+    {
+      math: `${pointA.label}${formatCoordinate(pointA.x.format(), pointA.y.format())}, ${pointB.label}${formatCoordinate(pointB.x.format(), pointB.y.format())}`,
+      note: "Start with the two given points.",
+    },
+    {
+      math: `delta x = ${pointB.x.format()} - ${pointA.x.format()} = ${deltaX.format()}, delta y = ${pointB.y.format()} - ${pointA.y.format()} = ${deltaY.format()}`,
+      note: "Find the horizontal and vertical changes between the points.",
+    },
+  ];
+
+  if (deltaX.isZero()) {
+    const lineEquation = `x = ${pointA.x.format()}`;
+    steps.push(
+      {
+        math: `${pointA.x.format()} = ${pointB.x.format()}`,
+        note: "The x-coordinates match, so the line is vertical and the slope is undefined.",
+      },
+      {
+        math: `M = ${formatCoordinate(midpointX.format(), midpointY.format())}`,
+        note: "Average the x-coordinates and y-coordinates to find the midpoint.",
+      },
+      {
+        math: `d = sqrt((${deltaX.format()})^2 + (${deltaY.format()})^2) = ${distance}`,
+        note: "Use the distance formula.",
+      },
+      {
+        math: lineEquation,
+        note: "A vertical line through both points has a constant x-value.",
+      },
+    );
+
+    return {
+      title: "Coordinate geometry",
+      topic: "Two-point geometry",
+      summary: "Slope, midpoint, distance, and the line through two points",
+      standardCodes: ["G.GPE.B.5", "G.GPE.B.6", "G.GPE.B.7"],
+      features: [
+        {
+          label: "Slope",
+          value: "undefined",
+        },
+        {
+          label: "Midpoint",
+          value: formatCoordinate(midpointX.format(), midpointY.format()),
+        },
+        {
+          label: "Distance",
+          value: distance,
+        },
+        {
+          label: "Line equation",
+          value: lineEquation,
+        },
+      ],
+      steps,
+      points,
+      line: {
+        kind: "vertical",
+        x: rationalToNumber(pointA.x),
+      },
+      window: buildPointWindow(points),
+    };
+  }
+
+  const slope = deltaY.divide(deltaX);
+  const intercept = pointA.y.subtract(slope.multiply(pointA.x));
+  const pointSlopeForm = formatPointSlopeEquation(pointA.y, slope, pointA.x);
+  const slopeInterceptForm = `y = ${formatLinear({
+    coefficient: slope,
+    constant: intercept,
+  })}`;
+  steps.push(
+    {
+      math: `m = (${pointB.y.format()} - ${pointA.y.format()}) / (${pointB.x.format()} - ${pointA.x.format()}) = ${deltaY.format()}/${deltaX.format()} = ${slope.format()}`,
+      note: "Use rise over run to find the slope.",
+    },
+    {
+      math: `M = ${formatCoordinate(midpointX.format(), midpointY.format())}`,
+      note: "Average the x-coordinates and y-coordinates to find the midpoint.",
+    },
+    {
+      math: `d = sqrt((${deltaX.format()})^2 + (${deltaY.format()})^2) = ${distance}`,
+      note: "Use the distance formula.",
+    },
+    {
+      math: pointSlopeForm,
+      note: "Write the line in point-slope form using one point and the slope.",
+    },
+    {
+      math: slopeInterceptForm,
+      note: "Rewrite the line in slope-intercept form.",
+    },
+  );
+
+  return {
+    title: "Coordinate geometry",
+    topic: "Two-point geometry",
+    summary: "Slope, midpoint, distance, and the line through two points",
+    standardCodes: ["G.GPE.B.5", "G.GPE.B.6", "G.GPE.B.7"],
+    features: [
+      {
+        label: "Slope",
+        value: slope.format(),
+      },
+      {
+        label: "Midpoint",
+        value: formatCoordinate(midpointX.format(), midpointY.format()),
+      },
+      {
+        label: "Distance",
+        value: distance,
+      },
+      {
+        label: "Point-slope form",
+        value: pointSlopeForm,
+      },
+      {
+        label: "Slope-intercept form",
+        value: slopeInterceptForm,
+      },
+    ],
+    steps,
+    points,
+    line: {
+      kind: "regular",
+      slope: rationalToNumber(slope),
+      intercept: rationalToNumber(intercept),
+    },
+    window: buildPointWindow(points),
+  };
 }
 
 function trySolveLinearEquation(input: string): SolveTrace | null {
@@ -1812,6 +1984,50 @@ function buildSequenceTable(
   return rows;
 }
 
+function parseGeometryPoints(input: string) {
+  const trimmed = input.trim();
+  if (!trimmed.toLowerCase().startsWith("points")) {
+    return null;
+  }
+
+  const matches = Array.from(
+    trimmed.matchAll(
+      /([A-Za-z])?\s*\((-?\d+(?:\/\d+)?(?:\.\d+)?),\s*(-?\d+(?:\/\d+)?(?:\.\d+)?)\)/g,
+    ),
+  );
+  if (matches.length !== 2) {
+    return null;
+  }
+
+  try {
+    return matches.map((match, index) => ({
+      label: match[1] ?? String.fromCharCode(65 + index),
+      x: Rational.fromString(match[2] ?? "0"),
+      y: Rational.fromString(match[3] ?? "0"),
+    }));
+  } catch {
+    return null;
+  }
+}
+
+function buildPointWindow(points: GeometryPoint[]) {
+  const xValues = points.map((point) => point.x);
+  const yValues = points.map((point) => point.y);
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues);
+  const xPadding = Math.max(2, (xMax - xMin) * 0.4 || 2);
+  const yPadding = Math.max(2, (yMax - yMin) * 0.4 || 2);
+
+  return {
+    xMin: Math.floor(xMin - xPadding),
+    xMax: Math.ceil(xMax + xPadding),
+    yMin: Math.floor(yMin - yPadding),
+    yMax: Math.ceil(yMax + yPadding),
+  };
+}
+
 function formatSequenceTerms(terms: Rational[]) {
   return terms.map((term) => term.format()).join(", ");
 }
@@ -1899,6 +2115,66 @@ function formatRecursiveMultiplier(value: Rational) {
   }
 
   return value.format();
+}
+
+function formatPointSlopeEquation(yValue: Rational, slope: Rational, xValue: Rational) {
+  const left =
+    yValue.isZero()
+      ? "y"
+      : yValue.isNegative()
+        ? `y + ${yValue.abs().format()}`
+        : `y - ${yValue.format()}`;
+  const rightInner =
+    xValue.isZero()
+      ? "x"
+      : xValue.isNegative()
+        ? `x + ${xValue.abs().format()}`
+        : `x - ${xValue.format()}`;
+
+  if (slope.isOne()) {
+    return `${left} = ${rightInner === "x" ? "x" : `(${rightInner})`}`;
+  }
+
+  if (slope.isNegativeOne()) {
+    return `${left} = -${rightInner === "x" ? "x" : `(${rightInner})`}`;
+  }
+
+  const coefficient =
+    slope.denominator === 1 && !slope.isNegative()
+      ? slope.format()
+      : `(${slope.format()})`;
+  const factor = rightInner === "x" ? "x" : `(${rightInner})`;
+  return `${left} = ${coefficient}${factor}`;
+}
+
+function formatPositiveSquareRoot(value: Rational) {
+  if (value.isZero()) {
+    return "0";
+  }
+
+  const simplified = simplifyRadicalFraction(
+    0,
+    value.numerator * value.denominator,
+    value.denominator,
+  );
+
+  if (simplified.sqrtCoefficient === 0) {
+    return new Rational(simplified.constant, simplified.denominator).format();
+  }
+
+  if (simplified.radicand === 1) {
+    return new Rational(simplified.sqrtCoefficient, simplified.denominator).format();
+  }
+
+  const radical = formatRadicalPart(
+    simplified.sqrtCoefficient,
+    simplified.radicand,
+  );
+  if (simplified.denominator === 1) {
+    return radical;
+  }
+
+  return `${radical}/${simplified.denominator}`;
 }
 
 function formatCandidate(value: Rational) {

@@ -101,3 +101,33 @@ export type SequenceAnalysis = {
   steps: RenderedLine[];
   table: SequenceTableRow[];
 };
+
+export type GeometryPoint = {
+  x: number;
+  y: number;
+  label: string;
+  role: "point" | "midpoint";
+};
+
+export type GeometryLine =
+  | {
+      kind: "regular";
+      slope: number;
+      intercept: number;
+    }
+  | {
+      kind: "vertical";
+      x: number;
+    };
+
+export type GeometryAnalysis = {
+  title: string;
+  topic: string;
+  summary: string;
+  standardCodes: string[];
+  features: GraphFeature[];
+  steps: RenderedLine[];
+  points: GeometryPoint[];
+  line: GeometryLine;
+  window: GraphWindow;
+};

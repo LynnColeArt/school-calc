@@ -240,6 +240,11 @@ button {
   border-color: #e3d5b8;
 }
 
+.example-button-geometry {
+  background: linear-gradient(180deg, #ffffff, #f7f7fc);
+  border-color: #cfd1ea;
+}
+
 .example-button code {
   font-size: 0.92rem;
   color: var(--accent-strong);
@@ -647,6 +652,73 @@ button {
   color: var(--accent-strong);
 }
 
+.geometry-section {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.geometry-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.geometry-heading h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.geometry-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.geometry-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.85fr);
+  gap: 1rem;
+}
+
+.geometry-sidebar {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.geometry-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.geometry-segment {
+  stroke: var(--gold);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+.geometry-point {
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.geometry-point-point {
+  fill: var(--accent-strong);
+}
+
+.geometry-point-midpoint {
+  fill: var(--gold);
+}
+
+.geometry-steps {
+  display: grid;
+  gap: 0.9rem;
+}
+
 @media (max-width: 880px) {
   .topbar {
     align-items: flex-start;
@@ -663,7 +735,8 @@ button {
 
   .solution-layout-work.solution-layout-graph,
   .graph-layout,
-  .sequence-layout {
+  .sequence-layout,
+  .geometry-top {
     grid-template-columns: 1fr;
   }
 
@@ -675,7 +748,8 @@ button {
   .solution-header,
   .result-row,
   .graph-heading,
-  .sequence-heading {
+  .sequence-heading,
+  .geometry-heading {
     flex-direction: column;
     align-items: flex-start;
   }
