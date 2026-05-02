@@ -87,4 +87,16 @@ export const EXAMPLE_PROBLEMS = [
     input: "4, 10, 16, 22",
     label: "arithmetic sequence",
   },
+  {
+    input: "a_n = 3a_(n - 1), a_1 = 2",
+    label: "recursive geometric",
+  },
+  {
+    input: "a_n = a_(n - 1) + 6, a_1 = 4",
+    label: "recursive arithmetic",
+  },
+  {
+    input: "a_n = 2a_(n - 1) + 3, a_1 = 4",
+    label: "general recursive",
+  },
 ] as const;

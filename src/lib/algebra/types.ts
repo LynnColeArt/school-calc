@@ -83,7 +83,7 @@ export type GraphAnalysis = {
   window: GraphWindow;
 };
 
-export type SequenceKind = "arithmetic" | "geometric";
+export type SequenceKind = "arithmetic" | "geometric" | "recursive";
 
 export type SequenceTableRow = {
   n: string;

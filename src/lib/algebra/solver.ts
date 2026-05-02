@@ -210,30 +210,33 @@ export function analyzeGraph(input: string): GraphAnalysis | null {
 
 export function analyzeSequence(input: string): SequenceAnalysis | null {
   const terms = parseSequenceTerms(input);
-  if (terms === null || terms.length < 3) {
-    return null;
+  if (terms !== null && terms.length >= 3) {
+    const arithmeticDifference = terms[1]?.subtract(terms[0] as Rational);
+    const isArithmetic =
+      arithmeticDifference !== undefined &&
+      terms.slice(1).every((term, index) =>
+        term.subtract(terms[index] as Rational).equals(arithmeticDifference),
+      );
+
+    const geometricRatio = inferGeometricRatio(terms);
+    const isGeometric =
+      geometricRatio !== null &&
+      terms.slice(1).every((term, index) =>
+        term.equals((terms[index] as Rational).multiply(geometricRatio)),
+      );
+
+    if (isGeometric && geometricRatio) {
+      return buildGeometricSequenceAnalysis(terms, geometricRatio);
+    }
+
+    if (isArithmetic && arithmeticDifference) {
+      return buildArithmeticSequenceAnalysis(terms, arithmeticDifference);
+    }
   }
 
-  const arithmeticDifference = terms[1]?.subtract(terms[0] as Rational);
-  const isArithmetic =
-    arithmeticDifference !== undefined &&
-    terms.slice(1).every((term, index) =>
-      term.subtract(terms[index] as Rational).equals(arithmeticDifference),
-    );
-
-  const geometricRatio = inferGeometricRatio(terms);
-  const isGeometric =
-    geometricRatio !== null &&
-    terms.slice(1).every((term, index) =>
-      term.equals((terms[index] as Rational).multiply(geometricRatio)),
-    );
-
-  if (isGeometric && geometricRatio) {
-    return buildGeometricSequenceAnalysis(terms, geometricRatio);
-  }
-
-  if (isArithmetic && arithmeticDifference) {
-    return buildArithmeticSequenceAnalysis(terms, arithmeticDifference);
+  const recursiveSequence = parseRecursiveSequence(input);
+  if (recursiveSequence !== null) {
+    return buildRecursiveSequenceAnalysis(recursiveSequence);
   }
 
   return null;
@@ -826,6 +829,122 @@ function buildGeometricSequenceAnalysis(
     ],
     steps,
     table: buildSequenceTable(terms, (current) => current.multiply(ratio)),
+  };
+}
+
+function buildRecursiveSequenceAnalysis(recursive: {
+  coefficient: Rational;
+  constant: Rational;
+  firstTerm: Rational;
+}): SequenceAnalysis {
+  const terms = buildRecursiveSequenceTerms(
+    recursive.firstTerm,
+    recursive.coefficient,
+    recursive.constant,
+    7,
+  );
+  const recursiveRule = formatRecursiveSequenceRule(
+    recursive.coefficient,
+    recursive.constant,
+    recursive.firstTerm,
+  );
+  const steps = [
+    {
+      math: recursiveRule,
+      note: "Start with the recursive rule and initial term.",
+    },
+    ...terms.slice(1, 4).map((term, index) => ({
+      math: formatRecursiveSequenceStep(
+        index + 2,
+        terms[index] as Rational,
+        recursive.coefficient,
+        recursive.constant,
+        term,
+      ),
+      note: "Use the previous term in the recursive rule.",
+    })),
+  ];
+
+  if (recursive.coefficient.isOne()) {
+    return {
+      kind: "arithmetic",
+      title: "Arithmetic sequence",
+      topic: "Sequences",
+      summary: "Recursive rule, explicit rule, and generated terms",
+      standardCodes: ["A1.LQE.A", "A1.LQE.B"],
+      features: [
+        { label: "Type", value: "arithmetic" },
+        { label: "Common difference", value: recursive.constant.format() },
+        { label: "Recursive rule", value: recursiveRule },
+        {
+          label: "Explicit rule",
+          value: formatArithmeticExplicitRule(
+            recursive.firstTerm,
+            recursive.constant,
+          ),
+        },
+      ],
+      steps: [
+        ...steps,
+        {
+          math: formatArithmeticExplicitRule(
+            recursive.firstTerm,
+            recursive.constant,
+          ),
+          note: "This recursive arithmetic sequence also has an explicit rule.",
+        },
+      ],
+      table: buildSequenceTableFromTerms(terms, 1),
+    };
+  }
+
+  if (recursive.constant.isZero()) {
+    return {
+      kind: "geometric",
+      title: "Geometric sequence",
+      topic: "Sequences",
+      summary: "Recursive rule, explicit rule, and generated terms",
+      standardCodes: ["A1.LQE.A", "A1.LQE.B"],
+      features: [
+        { label: "Type", value: "geometric" },
+        { label: "Common ratio", value: recursive.coefficient.format() },
+        { label: "Recursive rule", value: recursiveRule },
+        {
+          label: "Explicit rule",
+          value: formatGeometricExplicitRule(
+            recursive.firstTerm,
+            recursive.coefficient,
+          ),
+        },
+      ],
+      steps: [
+        ...steps,
+        {
+          math: formatGeometricExplicitRule(
+            recursive.firstTerm,
+            recursive.coefficient,
+          ),
+          note: "This recursive geometric sequence also has an explicit rule.",
+        },
+      ],
+      table: buildSequenceTableFromTerms(terms, 1),
+    };
+  }
+
+  return {
+    kind: "recursive",
+    title: "Recursive sequence",
+    topic: "Sequences",
+    summary: "Recursive rule and generated terms",
+    standardCodes: ["A1.LQE.A", "A1.LQE.B"],
+    features: [
+      { label: "Type", value: "recursive" },
+      { label: "Recursive rule", value: recursiveRule },
+      { label: "Multiplier", value: recursive.coefficient.format() },
+      { label: "Constant change", value: recursive.constant.format() },
+    ],
+    steps,
+    table: buildSequenceTableFromTerms(terms, 1),
   };
 }
 
@@ -1947,6 +2066,37 @@ function parseSequenceTerms(input: string) {
   }
 }
 
+function parseRecursiveSequence(input: string) {
+  const normalized = normalizeInput(input);
+  const match = normalized.match(/^a_n=(.+),a_1=(.+)$/);
+  if (!match?.[1] || !match[2]) {
+    return null;
+  }
+
+  const recurrence = match[1];
+  const initial = stripWrappingParens(match[2]);
+  const anchor = "a_(n-1)";
+  const anchorIndex = recurrence.indexOf(anchor);
+  if (anchorIndex === -1) {
+    return null;
+  }
+
+  const prefix = recurrence.slice(0, anchorIndex);
+  const suffix = recurrence.slice(anchorIndex + anchor.length);
+
+  try {
+    const coefficient = parseRecursiveCoefficient(prefix);
+    const constant = parseRecursiveConstant(suffix);
+    return {
+      coefficient,
+      constant,
+      firstTerm: Rational.fromString(initial),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function inferGeometricRatio(terms: Rational[]) {
   const first = terms[0];
   const second = terms[1];
@@ -1982,6 +2132,31 @@ function buildSequenceTable(
   }
 
   return rows;
+}
+
+function buildSequenceTableFromTerms(terms: Rational[], givenCount: number) {
+  return terms.map((term, index) => ({
+    n: String(index + 1),
+    value: term.format(),
+    projected: index >= givenCount,
+  }));
+}
+
+function buildRecursiveSequenceTerms(
+  firstTerm: Rational,
+  coefficient: Rational,
+  constant: Rational,
+  count: number,
+) {
+  const terms = [firstTerm];
+  let current = firstTerm;
+
+  for (let index = 1; index < count; index += 1) {
+    current = current.multiply(coefficient).add(constant);
+    terms.push(current);
+  }
+
+  return terms;
 }
 
 function parseGeometryPoints(input: string) {
@@ -2030,6 +2205,28 @@ function buildPointWindow(points: GeometryPoint[]) {
 
 function formatSequenceTerms(terms: Rational[]) {
   return terms.map((term) => term.format()).join(", ");
+}
+
+function formatRecursiveSequenceRule(
+  coefficient: Rational,
+  constant: Rational,
+  firstTerm: Rational,
+) {
+  const coefficientText = formatRecursiveMultiplier(coefficient);
+  const constantText = formatRecursiveConstant(constant);
+  return `a_n = ${coefficientText}a_(n - 1)${constantText}, a_1 = ${firstTerm.format()}`;
+}
+
+function formatRecursiveSequenceStep(
+  index: number,
+  previous: Rational,
+  coefficient: Rational,
+  constant: Rational,
+  current: Rational,
+) {
+  const coefficientValue = formatRecursivePreviousValue(coefficient, previous);
+  const constantText = formatRecursiveConstant(constant);
+  return `a_${index} = ${coefficientValue}${constantText} = ${current.format()}`;
 }
 
 function formatArithmeticDifferences(terms: Rational[]) {
@@ -2115,6 +2312,69 @@ function formatRecursiveMultiplier(value: Rational) {
   }
 
   return value.format();
+}
+
+function formatRecursiveConstant(value: Rational) {
+  if (value.isZero()) {
+    return "";
+  }
+
+  if (value.isNegative()) {
+    return ` - ${value.abs().format()}`;
+  }
+
+  return ` + ${value.format()}`;
+}
+
+function parseRecursiveCoefficient(value: string) {
+  const normalized = stripWrappingParens(value);
+  if (!normalized) {
+    return Rational.one();
+  }
+
+  if (normalized === "-") {
+    return new Rational(-1);
+  }
+
+  return Rational.fromString(normalized);
+}
+
+function parseRecursiveConstant(value: string) {
+  if (!value) {
+    return Rational.zero();
+  }
+
+  const match = value.match(/^([+-])(.+)$/);
+  if (!match?.[1] || !match[2]) {
+    throw new Error("Unsupported recursive constant.");
+  }
+
+  const constant = Rational.fromString(stripWrappingParens(match[2]));
+  return match[1] === "-" ? constant.negate() : constant;
+}
+
+function stripWrappingParens(value: string) {
+  if (value.startsWith("(") && value.endsWith(")")) {
+    return value.slice(1, -1);
+  }
+
+  return value;
+}
+
+function formatRecursivePreviousValue(coefficient: Rational, previous: Rational) {
+  if (coefficient.isOne()) {
+    return previous.format();
+  }
+
+  if (coefficient.isNegativeOne()) {
+    return `-(${previous.format()})`;
+  }
+
+  const coefficientText =
+    coefficient.denominator === 1 && !coefficient.isNegative()
+      ? coefficient.format()
+      : `(${coefficient.format()})`;
+  return `${coefficientText}(${previous.format()})`;
 }
 
 function formatPointSlopeEquation(yValue: Rational, slope: Rational, xValue: Rational) {

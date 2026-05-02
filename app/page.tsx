@@ -105,7 +105,7 @@ export default function Home() {
               aria-label="Math problem"
               className="problem-input"
               onChange={(event) => setProblem(event.target.value)}
-              placeholder="Solve 3x + 5 = 26, graph y = x^2 - 4x + 3, use points A(1, 2) B(5, 10), or enter 2, 6, 18, 54"
+              placeholder="Solve 3x + 5 = 26, graph y = x^2 - 4x + 3, use points A(1, 2) B(5, 10), or enter a_n = 3a_(n - 1), a_1 = 2"
               spellCheck={false}
               value={problem}
             />
@@ -179,7 +179,7 @@ export default function Home() {
           <div className="example-group" aria-label="Sequence examples">
             <h2 className="section-title">Sequence rules</h2>
             <p className="section-note">
-              Enter comma-separated terms to build recursive and explicit rules.
+              Enter comma-separated terms or a recursive rule with an initial term.
             </p>
             <div className="example-list">
               {sequenceExamples.map((example) => (

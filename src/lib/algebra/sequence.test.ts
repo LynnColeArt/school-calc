@@ -51,6 +51,60 @@ describe("analyzeSequence", () => {
     );
   });
 
+  it("reads a recursive geometric rule directly", () => {
+    const sequence = analyzeSequence("a_n = 3a_(n - 1), a_1 = 2");
+
+    expect(sequence?.kind).toBe("geometric");
+    expect(sequence?.features).toEqual(
+      expect.arrayContaining([
+        {
+          label: "Recursive rule",
+          value: "a_n = 3a_(n - 1), a_1 = 2",
+        },
+        { label: "Explicit rule", value: "a_n = 2(3)^(n - 1)" },
+      ]),
+    );
+    expect(sequence?.table.slice(0, 4)).toEqual([
+      { n: "1", value: "2", projected: false },
+      { n: "2", value: "6", projected: true },
+      { n: "3", value: "18", projected: true },
+      { n: "4", value: "54", projected: true },
+    ]);
+  });
+
+  it("reads a recursive arithmetic rule directly", () => {
+    const sequence = analyzeSequence("a_n = a_(n - 1) + 6, a_1 = 4");
+
+    expect(sequence?.kind).toBe("arithmetic");
+    expect(sequence?.features).toEqual(
+      expect.arrayContaining([
+        {
+          label: "Recursive rule",
+          value: "a_n = a_(n - 1) + 6, a_1 = 4",
+        },
+        { label: "Explicit rule", value: "a_n = 4 + 6(n - 1)" },
+      ]),
+    );
+  });
+
+  it("keeps a general recursive rule as recursive when it is not arithmetic or geometric", () => {
+    const sequence = analyzeSequence("a_n = 2a_(n - 1) + 3, a_1 = 4");
+
+    expect(sequence?.kind).toBe("recursive");
+    expect(sequence?.features).toEqual(
+      expect.arrayContaining([
+        { label: "Multiplier", value: "2" },
+        { label: "Constant change", value: "3" },
+      ]),
+    );
+    expect(sequence?.table.slice(0, 4)).toEqual([
+      { n: "1", value: "4", projected: false },
+      { n: "2", value: "11", projected: true },
+      { n: "3", value: "25", projected: true },
+      { n: "4", value: "53", projected: true },
+    ]);
+  });
+
   it("ignores non-sequence algebra input", () => {
     expect(analyzeSequence("3x + 5 = 26")).toBeNull();
   });
