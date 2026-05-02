@@ -16,6 +16,11 @@ type RadicalTerm = {
   radicand: number;
 };
 
+type RootCandidate = {
+  exact: string;
+  approx: number;
+};
+
 type Token =
   | { type: "number"; value: string }
   | { type: "variable"; value: string }
@@ -142,6 +147,11 @@ export function solveAlgebra(input: string): SolveTrace {
     return squareEquationTrace;
   }
 
+  const quadraticTrace = trySolveQuadraticEquation(normalizedInput);
+  if (quadraticTrace) {
+    return quadraticTrace;
+  }
+
   const linearTrace = trySolveLinearEquation(normalizedInput);
   if (linearTrace) {
     return linearTrace;
@@ -149,7 +159,7 @@ export function solveAlgebra(input: string): SolveTrace {
 
   return unsupported(
     input,
-    "This version supports linear equations, square equations shaped like ax^2 + c = d, square-root equations with a linear radicand, and square-root simplification.",
+    "This version supports linear equations, quadratics, square-root equations with a linear radicand, and square-root simplification.",
   );
 }
 
@@ -446,6 +456,101 @@ function trySolveSquareEquation(input: string): SolveTrace | null {
   }
 }
 
+function trySolveQuadraticEquation(input: string): SolveTrace | null {
+  if (!input.includes("=") || !input.includes("^2")) {
+    return null;
+  }
+
+  const [leftRaw, rightRaw, extra] = input.split("=");
+  if (extra !== undefined || leftRaw === undefined || rightRaw === undefined) {
+    return null;
+  }
+
+  try {
+    const left = parsePolynomial(leftRaw);
+    const right = parsePolynomial(rightRaw);
+    const normalizedEquation = formatPolynomialEquation(left, right);
+    const needsSimplification = normalizeInput(normalizedEquation) !== input;
+    const steps: SolveStep[] = [];
+    let previous = statement(
+      needsSimplification ? prettifyRawEquation(input) : normalizedEquation,
+    );
+
+    if (needsSimplification) {
+      const after = statement(normalizedEquation);
+      steps.push({
+        before: previous,
+        after,
+        operation: "Simplify each side",
+        reason:
+          "Rewriting each side in equivalent simplified form keeps the same solution set.",
+        rule: "quadratic.simplify",
+        standardCodes: ["A1.REI.A.1", "A1.SSE.A.2"],
+      });
+      previous = after;
+    }
+
+    let standard = subtractPolynomial(left, right);
+    if (standard.squareCoefficient.isZero()) {
+      return null;
+    }
+
+    if (standard.coefficient.isZero()) {
+      return null;
+    }
+
+    if (standard.squareCoefficient.isNegative()) {
+      standard = negatePolynomial(standard);
+      const after = statement(`${formatPolynomial(standard)} = 0`);
+      steps.push({
+        before: previous,
+        after,
+        operation: "Multiply both sides by -1",
+        reason:
+          "Multiplying both sides by -1 keeps the same solution set and makes the leading coefficient positive.",
+        rule: "quadratic.normalizeLeadingCoefficient",
+        standardCodes: ["A1.REI.A.1"],
+      });
+      previous = after;
+    } else {
+      const standardText = `${formatPolynomial(standard)} = 0`;
+      if (previous.text !== standardText) {
+        const after = statement(standardText);
+        steps.push({
+          before: previous,
+          after,
+          operation: "Move all terms to one side",
+          reason:
+            "Writing the equation in standard quadratic form makes it easier to solve.",
+          rule: "quadratic.standardForm",
+          standardCodes: ["A1.REI.A.1", "A1.REI.A.2"],
+        });
+        previous = after;
+      }
+    }
+
+    const resolution = buildQuadraticResolution(previous, standard);
+    if (resolution === null) {
+      return null;
+    }
+
+    return {
+      input,
+      title: "Quadratic equation",
+      topic: resolution.method,
+      course: "algebra1",
+      standardCodes: resolution.standardCodes,
+      steps: [...steps, ...resolution.steps],
+      result: {
+        kind: "solution",
+        value: resolution.result,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 function buildSquareRootPropertySteps(
   previous: MathStatement,
   value: number,
@@ -623,15 +728,6 @@ function solveSquareRootEqualsLinear(
   const leftAsPolynomial = linearToPolynomial(left);
   const standardPolynomial = subtractPolynomial(squaredRight, leftAsPolynomial);
 
-  if (!standardPolynomial.squareCoefficient.isOne()) {
-    return null;
-  }
-
-  const factors = factorMonicPolynomial(standardPolynomial);
-  if (factors === null) {
-    return null;
-  }
-
   const steps: SolveStep[] = [];
   const squaredStatement = statement(
     `${formatLinear(left)} = ${formatPolynomial(squaredRight)}`,
@@ -657,42 +753,20 @@ function solveSquareRootEqualsLinear(
     standardCodes: ["A1.REI.A.1", "A1.REI.A.2"],
   });
 
-  const factoredForm = `${formatBinomialFactor(factors.left)}${formatBinomialFactor(
-    factors.right,
-  )} = 0`;
-  steps.push({
-    before: statement(standardForm),
-    after: statement(factoredForm),
-    operation: "Factor the quadratic",
-    reason:
-      "Two numbers whose sum is the x-coefficient and whose product is the constant term give the factorization.",
-    rule: "quadratic.factor",
-    standardCodes: ["A1.SSE.A.2", "A1.REI.A.2"],
-  });
+  const resolution = buildQuadraticResolution(statement(standardForm), standardPolynomial);
+  if (resolution === null) {
+    return null;
+  }
 
-  const candidates = uniqueRationals([
-    new Rational(-factors.left),
-    new Rational(-factors.right),
-  ]);
-  const candidateStatement = formatSolutionSet(candidates);
-  steps.push({
-    before: statement(factoredForm),
-    after: statement(candidateStatement),
-    operation: "Use the zero product property",
-    reason:
-      "If a product is zero, then at least one factor must be zero.",
-    rule: "quadratic.zeroProduct",
-    standardCodes: ["A1.REI.A.2"],
-  });
+  steps.push(...resolution.steps);
 
-  const validSolutions: Rational[] = [];
-  let previous = statement(candidateStatement);
-  for (const candidate of candidates) {
-    const checkText = formatSquareRootEquationCheck(left, right, candidate);
-    const valid = isValidSquareRootSolution(left, right, candidate);
+  const validSolutions: RootCandidate[] = [];
+  let previous = statement(resolution.result);
+  for (const candidate of resolution.candidates) {
+    const valid = isValidSquareRootSolution(left, right, candidate.approx);
     const afterText = valid
-      ? `check ${formatCandidate(candidate)}: ${checkText} works`
-      : `check ${formatCandidate(candidate)}: ${checkText} is false, so reject it`;
+      ? `check x = ${candidate.exact}: substituting into the original equation works`
+      : `check x = ${candidate.exact}: substituting into the original equation is false, so reject it`;
     const after = statement(afterText);
     steps.push({
       before: previous,
@@ -710,7 +784,9 @@ function solveSquareRootEqualsLinear(
   }
 
   const finalValue =
-    validSolutions.length > 0 ? formatSolutionSet(validSolutions) : "no real solution";
+    validSolutions.length > 0
+      ? formatRootCandidates(validSolutions)
+      : "no real solution";
   steps.push({
     before: previous,
     after: statement(finalValue),
@@ -1268,41 +1344,198 @@ function formatCandidate(value: Rational) {
   return `x = ${value.format()}`;
 }
 
-function formatSolutionSet(values: Rational[]) {
+function formatRootCandidates(values: RootCandidate[]) {
   if (values.length === 0) {
     return "no real solution";
   }
 
   if (values.length === 1) {
-    return formatCandidate(values[0]);
+    return `x = ${values[0].exact}`;
   }
 
-  return values.map(formatCandidate).join(" or ");
+  return values.map((value) => `x = ${value.exact}`).join(" or ");
 }
 
-function factorMonicPolynomial(value: Polynomial) {
-  if (
-    !value.squareCoefficient.isOne() ||
-    value.coefficient.denominator !== 1 ||
-    value.constant.denominator !== 1
-  ) {
+function buildQuadraticResolution(
+  previous: MathStatement,
+  polynomial: Polynomial,
+): {
+  steps: SolveStep[];
+  candidates: RootCandidate[];
+  result: string;
+  method: string;
+  standardCodes: string[];
+} | null {
+  const integer = toIntegerQuadratic(polynomial);
+  if (integer === null) {
     return null;
   }
 
-  const linear = value.coefficient.numerator;
-  const constant = value.constant.numerator;
+  const factors = factorIntegerQuadratic(integer);
+  if (factors !== null) {
+    const factoredForm = `${formatGeneralBinomialFactor(
+      factors.left,
+    )}${formatGeneralBinomialFactor(factors.right)} = 0`;
+    const candidates = uniqueRootCandidates([
+      rationalRootCandidate(factors.left),
+      rationalRootCandidate(factors.right),
+    ]);
+    const result = formatRootCandidates(candidates);
 
-  if (constant === 0) {
-    return { left: 0, right: linear };
+    return {
+      steps: [
+        {
+          before: previous,
+          after: statement(factoredForm),
+          operation: "Factor the quadratic",
+          reason:
+            "The quadratic can be rewritten as a product of two binomials with the same solutions.",
+          rule: "quadratic.factor",
+          standardCodes: ["A1.SSE.A.2", "A1.REI.A.2"],
+        },
+        {
+          before: statement(factoredForm),
+          after: statement(result),
+          operation: "Use the zero product property",
+          reason:
+            "If a product is zero, then at least one factor must be zero.",
+          rule: "quadratic.zeroProduct",
+          standardCodes: ["A1.REI.A.2"],
+        },
+      ],
+      candidates,
+      result,
+      method: "Factoring",
+      standardCodes: ["A1.SSE.A.2", "A1.REI.A.2"],
+    };
   }
 
-  const limit = Math.abs(constant);
-  for (let candidate = 1; candidate <= limit; candidate += 1) {
-    for (const sign of [-1, 1]) {
-      const left = candidate * sign;
-      const right = constant / left;
-      if (Number.isInteger(right) && left + right === linear) {
-        return { left, right };
+  return buildQuadraticFormulaResolution(previous, integer);
+}
+
+function buildQuadraticFormulaResolution(
+  previous: MathStatement,
+  value: { a: number; b: number; c: number },
+): {
+  steps: SolveStep[];
+  candidates: RootCandidate[];
+  result: string;
+  method: string;
+  standardCodes: string[];
+} {
+  const discriminant = value.b * value.b - 4 * value.a * value.c;
+  const template = statement(
+    `x = (-(${value.b}) +/- sqrt((${value.b})^2 - 4(${value.a})(${value.c}))) / (2(${value.a}))`,
+  );
+  const steps: SolveStep[] = [
+    {
+      before: previous,
+      after: template,
+      operation: "Use the quadratic formula",
+      reason:
+        "When the quadratic does not factor cleanly, the quadratic formula gives all real solutions.",
+      rule: "quadratic.formula",
+      standardCodes: ["A1.REI.A.2"],
+    },
+  ];
+
+  if (discriminant < 0) {
+    steps.push({
+      before: template,
+      after: statement("no real solution"),
+      operation: "Evaluate the discriminant",
+      reason:
+        "A negative discriminant means the equation has no real solutions.",
+      rule: "quadratic.discriminantNegative",
+      standardCodes: ["A1.REI.A.2"],
+    });
+
+    return {
+      steps,
+      candidates: [],
+      result: "no real solution",
+      method: "Quadratic formula",
+      standardCodes: ["A1.REI.A.2"],
+    };
+  }
+
+  const formulaDisplay = formatQuadraticFormulaValue(value.a, value.b, discriminant);
+  steps.push({
+    before: template,
+    after: statement(`x = ${formulaDisplay}`),
+    operation: "Substitute and simplify",
+    reason:
+      "Substituting the coefficient values into the formula and simplifying gives the solution values.",
+    rule: "quadratic.formulaSubstitute",
+    standardCodes: ["A1.REI.A.2", "A1.NQ.A.2"],
+  });
+
+  const candidates = buildQuadraticFormulaCandidates(value.a, value.b, discriminant);
+  const result = formatRootCandidates(candidates);
+  if (`x = ${formulaDisplay}` !== result) {
+    steps.push({
+      before: statement(`x = ${formulaDisplay}`),
+      after: statement(result),
+      operation: "Write each solution",
+      reason:
+        "The plus-minus symbol represents two solution values when the discriminant is positive.",
+      rule: "quadratic.formulaSplit",
+      standardCodes: ["A1.REI.A.2"],
+    });
+  }
+
+  return {
+    steps,
+    candidates,
+    result,
+    method: "Quadratic formula",
+    standardCodes: ["A1.REI.A.2", "A1.NQ.A.2"],
+  };
+}
+
+function toIntegerQuadratic(value: Polynomial) {
+  const denominators = [
+    value.squareCoefficient.denominator,
+    value.coefficient.denominator,
+    value.constant.denominator,
+  ];
+  const scale = denominators.reduce((current, denominator) => lcm(current, denominator), 1);
+  let a = value.squareCoefficient.numerator * (scale / value.squareCoefficient.denominator);
+  let b = value.coefficient.numerator * (scale / value.coefficient.denominator);
+  let c = value.constant.numerator * (scale / value.constant.denominator);
+
+  const divisor = gcdMany([a, b, c]);
+  a /= divisor;
+  b /= divisor;
+  c /= divisor;
+
+  if (a < 0) {
+    a *= -1;
+    b *= -1;
+    c *= -1;
+  }
+
+  return { a, b, c };
+}
+
+function factorIntegerQuadratic(value: { a: number; b: number; c: number }) {
+  const divisorsOfA = signedDivisors(value.a);
+  const divisorsOfC = signedDivisors(value.c === 0 ? 1 : value.c);
+
+  for (const leftCoeff of divisorsOfA) {
+    const rightCoeff = value.a / leftCoeff;
+    for (const leftConstant of divisorsOfC) {
+      const rightConstant =
+        value.c === 0 ? 0 : value.c / leftConstant;
+      if (
+        leftCoeff * rightConstant + leftConstant * rightCoeff === value.b &&
+        leftCoeff * rightCoeff === value.a &&
+        leftConstant * rightConstant === value.c
+      ) {
+        return {
+          left: { xCoeff: leftCoeff, constant: leftConstant },
+          right: { xCoeff: rightCoeff, constant: rightConstant },
+        };
       }
     }
   }
@@ -1310,16 +1543,25 @@ function factorMonicPolynomial(value: Polynomial) {
   return null;
 }
 
-function formatBinomialFactor(constant: number) {
-  if (constant === 0) {
-    return "(x)";
+function rationalRootCandidate(value: { xCoeff: number; constant: number }): RootCandidate {
+  const rational = new Rational(-value.constant, value.xCoeff);
+  return {
+    exact: rational.format(),
+    approx: rational.numerator / rational.denominator,
+  };
+}
+
+function formatGeneralBinomialFactor(value: { xCoeff: number; constant: number }) {
+  const coefficient = value.xCoeff === 1 ? "x" : value.xCoeff === -1 ? "-x" : `${value.xCoeff}x`;
+  if (value.constant === 0) {
+    return `(${coefficient})`;
   }
 
-  if (constant > 0) {
-    return `(x + ${constant})`;
+  if (value.constant > 0) {
+    return `(${coefficient} + ${value.constant})`;
   }
 
-  return `(x - ${Math.abs(constant)})`;
+  return `(${coefficient} - ${Math.abs(value.constant)})`;
 }
 
 function operationPhrase(value: Rational, suffix = "") {
@@ -1407,6 +1649,190 @@ function extractSingleVariableSolution(value: string) {
   return match?.[1] ? Rational.fromString(match[1]) : null;
 }
 
+function buildQuadraticFormulaCandidates(a: number, b: number, discriminant: number) {
+  if (discriminant === 0) {
+    const root = new Rational(-b, 2 * a);
+    return [
+      {
+        exact: root.format(),
+        approx: root.numerator / root.denominator,
+      },
+    ];
+  }
+
+  return [
+    buildQuadraticFormulaCandidate(a, b, discriminant, 1),
+    buildQuadraticFormulaCandidate(a, b, discriminant, -1),
+  ];
+}
+
+function buildQuadraticFormulaCandidate(
+  a: number,
+  b: number,
+  discriminant: number,
+  sign: 1 | -1,
+): RootCandidate {
+  const simplified = simplifyRadicalFraction(-b, discriminant, 2 * a);
+  return {
+    exact: formatSimplifiedRoot(simplified, sign),
+    approx:
+      (simplified.constant +
+        sign * simplified.sqrtCoefficient * Math.sqrt(simplified.radicand)) /
+      simplified.denominator,
+  };
+}
+
+function formatQuadraticFormulaValue(a: number, b: number, discriminant: number) {
+  const simplified = simplifyRadicalFraction(-b, discriminant, 2 * a);
+  return formatPlusMinusRoot(simplified);
+}
+
+function simplifyRadicalFraction(
+  constant: number,
+  discriminant: number,
+  denominator: number,
+) {
+  if (discriminant < 0) {
+    throw new Error("Only real discriminants are supported.");
+  }
+
+  if (discriminant === 0) {
+    const rational = new Rational(constant, denominator);
+    return {
+      constant: rational.numerator,
+      sqrtCoefficient: 0,
+      radicand: 0,
+      denominator: rational.denominator,
+    };
+  }
+
+  const perfectSquare = largestPerfectSquareFactor(discriminant);
+  const sqrtCoefficient = Math.sqrt(perfectSquare);
+  const radicand = discriminant / perfectSquare;
+  const divisor = gcdMany([constant, sqrtCoefficient, denominator]);
+
+  const normalized = {
+    constant: constant / divisor,
+    sqrtCoefficient: sqrtCoefficient / divisor,
+    radicand,
+    denominator: denominator / divisor,
+  };
+
+  if (normalized.denominator < 0) {
+    normalized.constant *= -1;
+    normalized.sqrtCoefficient *= -1;
+    normalized.denominator *= -1;
+  }
+
+  return normalized;
+}
+
+function formatPlusMinusRoot(value: {
+  constant: number;
+  sqrtCoefficient: number;
+  radicand: number;
+  denominator: number;
+}) {
+  if (value.sqrtCoefficient === 0) {
+    return new Rational(value.constant, value.denominator).format();
+  }
+
+  const radical = formatRadicalPart(value.sqrtCoefficient, value.radicand);
+  if (value.denominator === 1) {
+    if (value.constant === 0) {
+      return `+/-${radical}`;
+    }
+
+    return `${value.constant} +/- ${radical}`;
+  }
+
+  if (value.constant === 0) {
+    return `+/-${radical}/${value.denominator}`;
+  }
+
+  return `(${value.constant} +/- ${radical})/${value.denominator}`;
+}
+
+function formatSimplifiedRoot(
+  value: {
+    constant: number;
+    sqrtCoefficient: number;
+    radicand: number;
+    denominator: number;
+  },
+  sign: 1 | -1,
+) {
+  if (value.sqrtCoefficient === 0) {
+    return new Rational(value.constant, value.denominator).format();
+  }
+
+  if (value.radicand === 1) {
+    return new Rational(
+      value.constant + sign * value.sqrtCoefficient,
+      value.denominator,
+    ).format();
+  }
+
+  const radical = formatRadicalPart(value.sqrtCoefficient, value.radicand);
+  if (value.denominator === 1) {
+    if (value.constant === 0) {
+      return sign === 1 ? radical : `-${radical}`;
+    }
+
+    return sign === 1
+      ? `${value.constant} + ${radical}`
+      : `${value.constant} - ${radical}`;
+  }
+
+  if (value.constant === 0) {
+    return sign === 1
+      ? `${radical}/${value.denominator}`
+      : `-${radical}/${value.denominator}`;
+  }
+
+  return sign === 1
+    ? `(${value.constant} + ${radical})/${value.denominator}`
+    : `(${value.constant} - ${radical})/${value.denominator}`;
+}
+
+function formatRadicalPart(coefficient: number, radicand: number) {
+  if (radicand === 1) {
+    return String(coefficient);
+  }
+
+  if (coefficient === 1) {
+    return `sqrt(${radicand})`;
+  }
+
+  return `${coefficient}sqrt(${radicand})`;
+}
+
+function uniqueRootCandidates(values: RootCandidate[]) {
+  const unique: RootCandidate[] = [];
+  for (const value of values) {
+    if (!unique.some((candidate) => candidate.exact === value.exact)) {
+      unique.push(value);
+    }
+  }
+  return unique;
+}
+
+function signedDivisors(value: number) {
+  if (value === 0) {
+    return [1, -1];
+  }
+
+  const absolute = Math.abs(value);
+  const divisors = new Set<number>();
+  for (let candidate = 1; candidate <= absolute; candidate += 1) {
+    if (absolute % candidate === 0) {
+      divisors.add(candidate);
+      divisors.add(-candidate);
+    }
+  }
+  return Array.from(divisors);
+}
+
 function rightConstantStatement(value: Rational) {
   return value.format();
 }
@@ -1427,45 +1853,19 @@ function buildSolutionCheckStep(
   };
 }
 
-function evaluateLinear(expression: Linear, value: Rational) {
-  return expression.coefficient.multiply(value).add(expression.constant);
-}
+function isValidSquareRootSolution(left: Linear, right: Linear, value: number) {
+  const leftValue =
+    (left.coefficient.numerator / left.coefficient.denominator) * value +
+    left.constant.numerator / left.constant.denominator;
+  const rightValue =
+    (right.coefficient.numerator / right.coefficient.denominator) * value +
+    right.constant.numerator / right.constant.denominator;
 
-function isValidSquareRootSolution(left: Linear, right: Linear, value: Rational) {
-  const leftValue = evaluateLinear(left, value);
-  const rightValue = evaluateLinear(right, value);
-
-  if (leftValue.denominator !== 1 || rightValue.denominator !== 1) {
+  if (leftValue < 0) {
     return false;
   }
 
-  if (leftValue.numerator < 0) {
-    return false;
-  }
-
-  const root = Math.sqrt(leftValue.numerator);
-  if (!Number.isInteger(root)) {
-    return false;
-  }
-
-  return root === rightValue.numerator;
-}
-
-function formatSquareRootEquationCheck(left: Linear, right: Linear, value: Rational) {
-  return `sqrt(${formatLinearSubstitution(left, value)}) = ${formatLinearSubstitution(
-    right,
-    value,
-  )}`;
-}
-
-function uniqueRationals(values: Rational[]) {
-  const unique: Rational[] = [];
-  for (const value of values) {
-    if (!unique.some((candidate) => candidate.equals(value))) {
-      unique.push(value);
-    }
-  }
-  return unique;
+  return Math.abs(Math.sqrt(leftValue) - rightValue) < 1e-9;
 }
 
 function parseRadicalTerms(input: string) {
@@ -1638,4 +2038,17 @@ function gcd(a: number, b: number): number {
     right = next;
   }
   return left || 1;
+}
+
+function gcdMany(values: number[]) {
+  const nonZero = values.map((value) => Math.abs(value)).filter((value) => value !== 0);
+  if (nonZero.length === 0) {
+    return 1;
+  }
+
+  return nonZero.reduce((current, value) => gcd(current, value));
+}
+
+function lcm(a: number, b: number) {
+  return Math.abs(a * b) / gcd(a, b);
 }

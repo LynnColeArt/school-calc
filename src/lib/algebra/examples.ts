@@ -24,12 +24,20 @@ export const EXAMPLE_PROBLEMS = [
     label: "zero-product shape",
   },
   {
+    input: "x^2 - 7x + 8 = 0",
+    label: "quadratic formula",
+  },
+  {
     input: "sqrt(x) = 5",
     label: "square both sides",
   },
   {
     input: "sqrt(x + 4) = 7",
     label: "radical equation",
+  },
+  {
+    input: "sqrt(x + 1) = x - 3",
+    label: "formula with root check",
   },
   {
     input: "sqrt(x + 12) = x",

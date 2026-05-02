@@ -56,6 +56,13 @@ describe("solveAlgebra", () => {
     expect(trace.result.value).toBe("x = 0");
   });
 
+  it("uses the quadratic formula for a non-factorable quadratic", () => {
+    const trace = solveAlgebra("x^2 - 7x + 8 = 0");
+
+    expect(trace.result.value).toBe("x = (7 + sqrt(17))/2 or x = (7 - sqrt(17))/2");
+    expect(trace.steps.some((step) => step.operation === "Use the quadratic formula")).toBe(true);
+  });
+
   it("solves a simple square-root equation with a check step", () => {
     const trace = solveAlgebra("sqrt(x) = 5");
 
@@ -78,6 +85,16 @@ describe("solveAlgebra", () => {
     expect(trace.steps.map((step) => step.after.text)).toContain(
       "x = -3 or x = 4",
     );
+    expect(
+      trace.steps.some((step) => step.after.text.includes("reject it")),
+    ).toBe(true);
+  });
+
+  it("uses the quadratic formula inside a square-root equation and keeps only the valid root", () => {
+    const trace = solveAlgebra("sqrt(x + 1) = x - 3");
+
+    expect(trace.result.value).toBe("x = (7 + sqrt(17))/2");
+    expect(trace.steps.some((step) => step.operation === "Use the quadratic formula")).toBe(true);
     expect(
       trace.steps.some((step) => step.after.text.includes("reject it")),
     ).toBe(true);
